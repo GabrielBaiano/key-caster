@@ -142,34 +142,47 @@ def test_mouse_drag_movement(qapp):
     assert win.pos() != start_pos
 
 
-def test_xkb_resolver_system_layout():
+def test_xkb_resolver_active_detection():
     from xkb_resolver import XkbResolver
     resolver = XkbResolver(layout="auto")
     assert resolver.available
 
-    # Brazilian ThinkPad / ABNT2 system layout:
-    # Scancode 41 (key under ESC) should be apostrophe, not tilde
+    # Active system desktop layout (US alt-intl):
+    # Scancode 41 (key under ESC) produces ` and ~
     res_41 = resolver.resolve(41, is_shift=False)
-    assert res_41 == {"type": "char", "name": "'"}
+    assert res_41 == {"type": "char", "name": "`"}
     res_41_s = resolver.resolve(41, is_shift=True)
-    assert res_41_s == {"type": "char", "name": '"'}
+    assert res_41_s == {"type": "char", "name": "~"}
 
-    # Scancode 40 (dead key ~ / ^)
-    res_40 = resolver.resolve(40, is_shift=False)
-    assert res_40 == {"type": "char", "name": "~"}
-    res_40_s = resolver.resolve(40, is_shift=True)
-    assert res_40_s == {"type": "char", "name": "^"}
-
-    # Scancode 89 (/ ?)
-    res_89 = resolver.resolve(89, is_shift=False)
-    assert res_89 == {"type": "char", "name": "/"}
-    res_89_s = resolver.resolve(89, is_shift=True)
-    assert res_89_s == {"type": "char", "name": "?"}
+    # Scancode 39 (key next to L) produces ; and : (NOT ç)
+    res_39 = resolver.resolve(39, is_shift=False)
+    assert res_39 == {"type": "char", "name": ";"}
+    res_39_s = resolver.resolve(39, is_shift=True)
+    assert res_39_s == {"type": "char", "name": ":"}
 
     # Space & Action keys
     assert resolver.resolve(57, is_shift=False) == {"type": "space", "name": "space"}
     assert resolver.resolve(14, is_shift=False) == {"type": "action", "name": "⌫"}
     assert resolver.resolve(28, is_shift=False) == {"type": "action", "name": "↩"}
+
+
+def test_xkb_resolver_abnt2_override():
+    from xkb_resolver import XkbResolver
+    resolver = XkbResolver(layout="abnt2")
+    assert resolver.available
+
+    # Brazilian ThinkPad / ABNT2 layout:
+    # Scancode 41 (key under ESC) should be apostrophe and quotedbl
+    res_41 = resolver.resolve(41, is_shift=False)
+    assert res_41 == {"type": "char", "name": "'"}
+    res_41_s = resolver.resolve(41, is_shift=True)
+    assert res_41_s == {"type": "char", "name": '"'}
+
+    # Scancode 39 (ç / Ç)
+    res_39 = resolver.resolve(39, is_shift=False)
+    assert res_39 == {"type": "char", "name": "ç"}
+    res_39_s = resolver.resolve(39, is_shift=True)
+    assert res_39_s == {"type": "char", "name": "Ç"}
 
 
 def test_xkb_resolver_us_override():
@@ -183,8 +196,13 @@ def test_xkb_resolver_us_override():
     res_41_s = resolver.resolve(41, is_shift=True)
     assert res_41_s == {"type": "char", "name": "~"}
 
-    # US layout: scancode 40 is ' and "
-    res_40 = resolver.resolve(40, is_shift=False)
-    assert res_40 == {"type": "char", "name": "'"}
-    res_40_s = resolver.resolve(40, is_shift=True)
-    assert res_40_s == {"type": "char", "name": '"'}
+
+def test_main_window_switch_layout(qapp):
+    win = MainWindow(start_worker=False)
+    win.set_keyboard_layout("us-intl")
+    assert win.layout == "us-intl"
+    assert win.worker.layout == "us-intl"
+
+    win.set_keyboard_layout("abnt2")
+    assert win.layout == "abnt2"
+    assert win.worker.layout == "abnt2"

@@ -157,6 +157,10 @@ class Worker(QThread):
     def stop(self):
         self._running = False
 
+    def set_layout(self, layout: str):
+        self.layout = layout
+        self.xkb_resolver = XkbResolver(layout=layout)
+
     def run(self):
         try:
             import keyboard
@@ -250,6 +254,7 @@ class MainWindow(QMainWindow):
 
         self.timeout = timeout
         self.max_keys = max_keys
+        self.layout = layout
         self._drag_pos = QPoint()
 
         self.setWindowTitle("Key-caster")
@@ -365,6 +370,11 @@ class MainWindow(QMainWindow):
         else:
             self.timeout = 2.0
 
+    def set_keyboard_layout(self, layout: str):
+        self.layout = layout
+        if hasattr(self, "worker") and self.worker:
+            self.worker.set_layout(layout)
+
     # Mouse drag-and-drop to position the overlay anywhere
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
@@ -402,6 +412,13 @@ class MainWindow(QMainWindow):
         auto_hide_text = "Disable Auto-Hide" if self.timeout > 0 else "Enable Auto-Hide"
         toggle_act = menu.addAction(auto_hide_text)
 
+        layout_menu = menu.addMenu("Keyboard Layout")
+        layout_menu.setStyleSheet(menu.styleSheet())
+        l_auto = layout_menu.addAction("Auto (System Active)")
+        l_us_intl = layout_menu.addAction("US International (alt-intl)")
+        l_abnt2 = layout_menu.addAction("BR ABNT2 (ThinkPad)")
+        l_us = layout_menu.addAction("US Standard")
+
         pos_menu = menu.addMenu("Position")
         pos_menu.setStyleSheet(menu.styleSheet())
         p_br = pos_menu.addAction("Bottom Right")
@@ -422,6 +439,14 @@ class MainWindow(QMainWindow):
             self.clear_display()
         elif action == toggle_act:
             self.toggle_auto_hide()
+        elif action == l_auto:
+            self.set_keyboard_layout("auto")
+        elif action == l_us_intl:
+            self.set_keyboard_layout("us-intl")
+        elif action == l_abnt2:
+            self.set_keyboard_layout("abnt2")
+        elif action == l_us:
+            self.set_keyboard_layout("us")
         elif action == p_br:
             self.location_on_the_screen("bottom-right")
         elif action == p_bc:
