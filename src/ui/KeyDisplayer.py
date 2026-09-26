@@ -1,15 +1,26 @@
-from PyQt5.QtWidgets import QLabel
+from collections import deque
 from PyQt5.QtCore import Qt
+from PyQt5.QtWidgets import QLabel
 
 
 class KeyDisplayer(QLabel):
-    def __init__(self, parent):
+    def __init__(self, parent=None, max_keys=5, font_size=32):
         super().__init__(parent)
+        self.max_keys = max_keys
+        self._keys = deque(maxlen=max_keys)
         self.setAlignment(Qt.AlignCenter)
-        self.setStyleSheet("color: white; font-size: 30px; background: none;")
+        self.setStyleSheet(
+            f"color: #ffffff; font-size: {font_size}px; font-weight: normal; "
+            "font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; "
+            "background: transparent;"
+        )
 
     def add_key(self, key):
-        curr_text = self.text()
-        if len(curr_text) > 4:
-            curr_text = curr_text[-4:]
-        self.setText(curr_text + key)
+        self._keys.append(key)
+        self.setText("".join(self._keys))
+
+    def clear_keys(self):
+        self._keys.clear()
+        self.setText("")
+
+
