@@ -140,3 +140,51 @@ def test_mouse_drag_movement(qapp):
     move_event = QMouseEvent(QEvent.MouseMove, QPoint(20, 20), QPoint(120, 120), Qt.LeftButton, Qt.LeftButton, Qt.NoModifier)
     win.mouseMoveEvent(move_event)
     assert win.pos() != start_pos
+
+
+def test_xkb_resolver_system_layout():
+    from xkb_resolver import XkbResolver
+    resolver = XkbResolver(layout="auto")
+    assert resolver.available
+
+    # Brazilian ThinkPad / ABNT2 system layout:
+    # Scancode 41 (key under ESC) should be apostrophe, not tilde
+    res_41 = resolver.resolve(41, is_shift=False)
+    assert res_41 == {"type": "char", "name": "'"}
+    res_41_s = resolver.resolve(41, is_shift=True)
+    assert res_41_s == {"type": "char", "name": '"'}
+
+    # Scancode 40 (dead key ~ / ^)
+    res_40 = resolver.resolve(40, is_shift=False)
+    assert res_40 == {"type": "char", "name": "~"}
+    res_40_s = resolver.resolve(40, is_shift=True)
+    assert res_40_s == {"type": "char", "name": "^"}
+
+    # Scancode 89 (/ ?)
+    res_89 = resolver.resolve(89, is_shift=False)
+    assert res_89 == {"type": "char", "name": "/"}
+    res_89_s = resolver.resolve(89, is_shift=True)
+    assert res_89_s == {"type": "char", "name": "?"}
+
+    # Space & Action keys
+    assert resolver.resolve(57, is_shift=False) == {"type": "space", "name": "space"}
+    assert resolver.resolve(14, is_shift=False) == {"type": "action", "name": "⌫"}
+    assert resolver.resolve(28, is_shift=False) == {"type": "action", "name": "↩"}
+
+
+def test_xkb_resolver_us_override():
+    from xkb_resolver import XkbResolver
+    resolver = XkbResolver(layout="us")
+    assert resolver.available
+
+    # US layout: scancode 41 is ` and ~
+    res_41 = resolver.resolve(41, is_shift=False)
+    assert res_41 == {"type": "char", "name": "`"}
+    res_41_s = resolver.resolve(41, is_shift=True)
+    assert res_41_s == {"type": "char", "name": "~"}
+
+    # US layout: scancode 40 is ' and "
+    res_40 = resolver.resolve(40, is_shift=False)
+    assert res_40 == {"type": "char", "name": "'"}
+    res_40_s = resolver.resolve(40, is_shift=True)
+    assert res_40_s == {"type": "char", "name": '"'}

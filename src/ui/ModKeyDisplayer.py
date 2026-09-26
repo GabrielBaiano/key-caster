@@ -35,6 +35,7 @@ class ModKeyDisplayer(QFrame):
             border_right = "border-right: 1px solid #1f1f22;" if i < len(keys) - 1 else ""
             lbl.setStyleSheet(f"""
                 font-size: 17px;
+                font-family: -apple-system, BlinkMacSystemFont, "DejaVu Sans", "Noto Sans", "Segoe UI", sans-serif;
                 background: transparent;
                 {border_right}
             """)

@@ -12,6 +12,10 @@ from PyQt5.QtWidgets import QApplication, QDesktopWidget, QMainWindow, QMenu
 from ui.CentralWidget import CentralWidget
 from ui.KeyDisplayer import KeyDisplayer
 from ui.ModKeyDisplayer import ModKeyDisplayer
+try:
+    from xkb_resolver import XkbResolver
+except ImportError:
+    from src.xkb_resolver import XkbResolver
 
 
 def detect_system_layout() -> str:
@@ -148,6 +152,7 @@ class Worker(QThread):
         super().__init__()
         self._running = True
         self.layout = detect_system_layout() if layout == "auto" else layout
+        self.xkb_resolver = XkbResolver(layout=layout)
 
     def stop(self):
         self._running = False
@@ -189,29 +194,40 @@ class Worker(QThread):
                 and last.event_type == keyboard.KEY_DOWN
                 and last.scan_code == e.scan_code
             )
+            is_shift = "shift" in e.modifiers
 
-            if not is_modifier and is_key_down and not is_holding:
-                raw_name = e.name
-                is_shift = "shift" in e.modifiers
+            resolved = self.xkb_resolver.resolve(e.scan_code, is_shift=is_shift)
 
-                # Translate shifted keys for layout (e.g. Shift + ~ -> ^)
-                if is_shift:
-                    active_table = self.shift_maps.get(
-                        self.layout, self.shift_maps.get("abnt2", {})
-                    )
-                    if raw_name in active_table:
-                        raw_name = active_table[raw_name]
-                    elif len(raw_name) == 1 and raw_name.isalpha():
-                        raw_name = raw_name.upper()
+            if resolved:
+                if resolved["type"] == "modifier":
+                    is_modifier = True
+                elif is_key_down and not is_holding:
+                    if resolved["type"] == "space":
+                        self.space_pressed.emit()
+                    else:
+                        self.key_pressed.emit(resolved["name"])
+                    self.modifiers_updated.emit(list(e.modifiers))
+            else:
+                if not is_modifier and is_key_down and not is_holding:
+                    raw_name = e.name
+                    if raw_name != "unknown":
+                        if is_shift:
+                            active_table = self.shift_maps.get(
+                                self.layout, self.shift_maps.get("abnt2", {})
+                            )
+                            if raw_name in active_table:
+                                raw_name = active_table[raw_name]
+                            elif len(raw_name) == 1 and raw_name.isalpha():
+                                raw_name = raw_name.upper()
 
-                if raw_name == "space":
-                    self.space_pressed.emit()
-                else:
-                    key_label = self.map_keys.get(raw_name, raw_name)
-                    self.key_pressed.emit(key_label)
+                        if raw_name == "space":
+                            self.space_pressed.emit()
+                        else:
+                            key_label = self.map_keys.get(raw_name, raw_name)
+                            self.key_pressed.emit(key_label)
+                    self.modifiers_updated.emit(list(e.modifiers))
 
-                self.modifiers_updated.emit(list(e.modifiers))
-            elif is_modifier and is_key_down:
+            if is_modifier and is_key_down:
                 self.modifiers_updated.emit(list(e.modifiers))
             elif is_modifier and not is_key_down:
                 self.modifiers_reset.emit((e.name,))
