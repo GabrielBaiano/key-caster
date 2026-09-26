@@ -210,6 +210,7 @@ class Worker(QThread):
             else:
                 if not is_modifier and is_key_down and not is_holding:
                     raw_name = e.name
+                    # Se o dumpkeys cuspir 'unknown', joga essa m#@! fora em vez de poluir a tela
                     if raw_name != "unknown":
                         if is_shift:
                             active_table = self.shift_maps.get(

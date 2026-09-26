@@ -24,7 +24,8 @@ def get_system_rmlvo(user_layout: str = "auto") -> Dict[str, Optional[bytes]]:
         "options": None,
     }
 
-    # 1. Check COSMIC desktop configuration
+    # O dumpkeys do kernel eh uma m#@! no Wayland. Se VC Keymap tiver unset,
+    # ele cospe layout US e f#@! tudo. Temos que caçar a config real do COSMIC:
     cosmic_file = os.path.expanduser(
         "~/.config/cosmic/com.system76.CosmicComp/v1/xkb_config"
     )
@@ -236,7 +237,8 @@ class XkbResolver:
         if not self.available or scan_code <= 0:
             return None
 
-        # Linux evdev scancode to XKB keycode (+8 offset)
+        # +8 no scancode do evdev porque o XKB inventou esse offset nos anos 80
+        # e ate hoje a gente tem que carregar esse legado do c#@!
         xkb_code = scan_code + 8
         mod_mask = (1 << self.shift_idx) if is_shift else 0
         self.xkb.xkb_state_update_mask(self.state, mod_mask, 0, 0, 0, 0, 0)
@@ -258,6 +260,8 @@ class XkbResolver:
         if sym_name in self.ACTION_KEYS:
             return {"type": "action", "name": self.ACTION_KEYS[sym_name]}
 
+        # Dead keys nao cospem UTF-8 direto nessa p#@!, xkb_state_key_get_utf8 retorna vazio.
+        # Tem que traduzir na marra:
         if sym_name in self.DEAD_KEYS:
             return {"type": "char", "name": self.DEAD_KEYS[sym_name]}
 
