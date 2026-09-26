@@ -38,10 +38,6 @@ def test_key_displayer_queue(qapp):
     displayer.add_key("D")
     assert displayer.text() == "BCD"
 
-    # Append symbol key
-    displayer.add_key("󰌒 ")
-    assert "󰌒 " in displayer.text()
-
     displayer.clear_keys()
     assert displayer.text() == ""
 
@@ -49,6 +45,8 @@ def test_key_displayer_queue(qapp):
 def test_mod_key_displayer(qapp):
     mod = ModKeyDisplayer(parent=None)
     assert "#555555" in mod.modifiers["ctrl"].text()
+    assert "⌃" in mod.modifiers["ctrl"].text()
+    assert "⇧" in mod.modifiers["shift"].text()
 
     mod.set_modifiers(["ctrl", "shift"])
     assert "#ffffff" in mod.modifiers["ctrl"].text()
@@ -63,15 +61,32 @@ def test_mod_key_displayer(qapp):
     assert "#555555" in mod.modifiers["shift"].text()
 
 
-def test_worker_key_mapping():
-    assert Worker.map_keys["space"] == "󱁐 "
-    assert Worker.map_keys["enter"] == "󰌑 "
-    assert Worker.map_keys["backspace"] == "󰌍 "
-    assert Worker.map_keys["tab"] == "󰌒 "
-    assert Worker.map_keys["up"] == "󰬭 "
-    assert Worker.map_keys["down"] == "󰬧 "
-    assert Worker.map_keys["left"] == "󰬩 "
-    assert Worker.map_keys["right"] == "󰬫 "
+def test_worker_mac_symbols():
+    assert Worker.map_keys["backspace"] == "⌫"
+    assert Worker.map_keys["delete"] == "⌦"
+    assert Worker.map_keys["enter"] == "↩"
+    assert Worker.map_keys["tab"] == "⇥"
+    assert Worker.map_keys["esc"] == "⎋"
+    assert Worker.map_keys["up"] == "↑"
+    assert Worker.map_keys["down"] == "↓"
+    assert Worker.map_keys["left"] == "←"
+    assert Worker.map_keys["right"] == "→"
+
+
+def test_worker_shift_mappings():
+    assert Worker.shift_maps["abnt2"]["~"] == "^"
+    assert Worker.shift_maps["abnt2"]["´"] == "`"
+    assert Worker.shift_maps["abnt2"]["'"] == '"'
+    assert Worker.shift_maps["us-intl"]["~"] == "^"
+
+
+def test_space_clears_display(qapp):
+    win = MainWindow(start_worker=False)
+    win.on_key_pressed("hello")
+    assert win.key_dis.text() == "hello"
+
+    win.on_space_pressed()
+    assert win.key_dis.text() == ""
 
 
 def test_main_window_events(qapp):

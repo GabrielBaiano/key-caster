@@ -4,8 +4,8 @@ from PyQt5.QtWidgets import QFrame, QHBoxLayout, QLabel
 
 class ModKeyDisplayer(QFrame):
     modifier_icons = {
-        "shift": "󰘶",
-        "ctrl": "󰘴",
+        "shift": "⇧",
+        "ctrl": "⌃",
         "alt": "⌥",
         "windows": "⌘",
     }

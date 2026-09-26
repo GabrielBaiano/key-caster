@@ -14,26 +14,140 @@ from ui.KeyDisplayer import KeyDisplayer
 from ui.ModKeyDisplayer import ModKeyDisplayer
 
 
+def detect_system_layout() -> str:
+    import subprocess
+    try:
+        out = subprocess.check_output(
+            ["setxkbmap", "-query"], universal_newlines=True, stderr=subprocess.DEVNULL
+        )
+        for line in out.splitlines():
+            if line.startswith("layout:"):
+                layout = line.split(":", 1)[1].strip()
+                if "br" in layout:
+                    return "abnt2"
+                elif "intl" in layout or "alt-intl" in layout:
+                    return "us-intl"
+    except Exception:
+        pass
+
+    try:
+        out = subprocess.check_output(
+            ["localectl", "status"], universal_newlines=True, stderr=subprocess.DEVNULL
+        )
+        for line in out.splitlines():
+            if "X11 Layout:" in line:
+                layout = line.split(":", 1)[1].strip()
+                if "br" in layout:
+                    return "abnt2"
+                elif "intl" in layout or "alt-intl" in layout:
+                    return "us-intl"
+    except Exception:
+        pass
+
+    return "abnt2"
+
+
 class Worker(QThread):
     key_pressed = pyqtSignal(str)
+    space_pressed = pyqtSignal()
     modifiers_updated = pyqtSignal(list)
     modifiers_reset = pyqtSignal(tuple)
     error_occurred = pyqtSignal(str)
 
     map_keys = {
-        "space": "󱁐 ",
-        "enter": "󰌑 ",
-        "backspace": "󰌍 ",
-        "tab": "󰌒 ",
-        "up": "󰬭 ",
-        "down": "󰬧 ",
-        "left": "󰬩 ",
-        "right": "󰬫 ",
+        "backspace": "⌫",
+        "delete": "⌦",
+        "enter": "↩",
+        "tab": "⇥",
+        "esc": "⎋",
+        "escape": "⎋",
+        "caps lock": "⇪",
+        "up": "↑",
+        "down": "↓",
+        "left": "←",
+        "right": "→",
     }
 
-    def __init__(self):
+    shift_maps = {
+        "abnt2": {
+            "~": "^",
+            "´": "`",
+            "'": '"',
+            ";": ":",
+            "/": "?",
+            ",": "<",
+            ".": ">",
+            "\\": "|",
+            "]": "}",
+            "[": "{",
+            "=": "+",
+            "-": "_",
+            "1": "!",
+            "2": "@",
+            "3": "#",
+            "4": "$",
+            "5": "%",
+            "6": "¨",
+            "7": "&",
+            "8": "*",
+            "9": "(",
+            "0": ")",
+            "ç": "Ç",
+        },
+        "us-intl": {
+            "~": "^",
+            "`": "~",
+            "'": '"',
+            ";": ":",
+            "/": "?",
+            ",": "<",
+            ".": ">",
+            "\\": "|",
+            "]": "}",
+            "[": "{",
+            "=": "+",
+            "-": "_",
+            "1": "!",
+            "2": "@",
+            "3": "#",
+            "4": "$",
+            "5": "%",
+            "6": "^",
+            "7": "&",
+            "8": "*",
+            "9": "(",
+            "0": ")",
+        },
+        "us": {
+            "`": "~",
+            "1": "!",
+            "2": "@",
+            "3": "#",
+            "4": "$",
+            "5": "%",
+            "6": "^",
+            "7": "&",
+            "8": "*",
+            "9": "(",
+            "0": ")",
+            "-": "_",
+            "=": "+",
+            "[": "{",
+            "]": "}",
+            "\\": "|",
+            ";": ":",
+            "'": '"',
+            ",": "<",
+            ".": ">",
+            "/": "?",
+        },
+    }
+    shift_maps["br"] = shift_maps["abnt2"]
+
+    def __init__(self, layout: str = "auto"):
         super().__init__()
         self._running = True
+        self.layout = detect_system_layout() if layout == "auto" else layout
 
     def stop(self):
         self._running = False
@@ -77,9 +191,26 @@ class Worker(QThread):
             )
 
             if not is_modifier and is_key_down and not is_holding:
-                key_label = self.map_keys.get(e.name, e.name)
+                raw_name = e.name
+                is_shift = "shift" in e.modifiers
+
+                # Translate shifted keys for layout (e.g. Shift + ~ -> ^)
+                if is_shift:
+                    active_table = self.shift_maps.get(
+                        self.layout, self.shift_maps.get("abnt2", {})
+                    )
+                    if raw_name in active_table:
+                        raw_name = active_table[raw_name]
+                    elif len(raw_name) == 1 and raw_name.isalpha():
+                        raw_name = raw_name.upper()
+
+                if raw_name == "space":
+                    self.space_pressed.emit()
+                else:
+                    key_label = self.map_keys.get(raw_name, raw_name)
+                    self.key_pressed.emit(key_label)
+
                 self.modifiers_updated.emit(list(e.modifiers))
-                self.key_pressed.emit(key_label)
             elif is_modifier and is_key_down:
                 self.modifiers_updated.emit(list(e.modifiers))
             elif is_modifier and not is_key_down:
@@ -93,8 +224,9 @@ class MainWindow(QMainWindow):
         self,
         timeout: float = 2.0,
         max_keys: int = 5,
-        font_size: int = 28,
-        opacity: float = 0.9,
+        font_size: int = 32,
+        opacity: float = 0.92,
+        layout: str = "auto",
         start_worker: bool = True,
     ):
         super().__init__()
@@ -132,8 +264,9 @@ class MainWindow(QMainWindow):
         self.inactivity_timer.timeout.connect(self.on_inactivity_timeout)
 
         # Background worker for keyboard events
-        self.worker = Worker()
+        self.worker = Worker(layout=layout)
         self.worker.key_pressed.connect(self.on_key_pressed)
+        self.worker.space_pressed.connect(self.on_space_pressed)
         self.worker.modifiers_updated.connect(self.on_modifiers_updated)
         self.worker.modifiers_reset.connect(self.on_modifiers_reset)
         self.worker.error_occurred.connect(self.on_worker_error)
@@ -190,6 +323,10 @@ class MainWindow(QMainWindow):
     @pyqtSlot(tuple)
     def on_modifiers_reset(self, modifiers: tuple):
         self.mod_dis.reset_modifiers(modifiers)
+
+    @pyqtSlot()
+    def on_space_pressed(self):
+        self.clear_display()
 
     @pyqtSlot()
     def on_inactivity_timeout(self):
@@ -312,8 +449,8 @@ def main():
         "-s",
         "--font-size",
         type=int,
-        default=28,
-        help="Font size for keys in pixels (default: 28)",
+        default=32,
+        help="Font size for keys in pixels (default: 32)",
     )
     parser.add_argument(
         "-o",
@@ -338,6 +475,14 @@ def main():
         ],
         help="Screen position preset (default: bottom-right)",
     )
+    parser.add_argument(
+        "-l",
+        "--layout",
+        type=str,
+        default="auto",
+        choices=["auto", "abnt2", "br", "us-intl", "us"],
+        help="Keyboard layout for shift mappings (default: auto)",
+    )
 
     args = parser.parse_args()
 
@@ -354,6 +499,7 @@ def main():
         max_keys=args.max_keys,
         font_size=args.font_size,
         opacity=args.opacity,
+        layout=args.layout,
     )
     window.location_on_the_screen(position=args.position)
     window.show()
