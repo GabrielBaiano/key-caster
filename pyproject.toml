@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "key-caster"
+version = "1.0.0"
+description = "Lightweight on-screen keystroke displayer for Linux (Wayland/COSMIC and X11)"
+readme = "README.md"
+license = { text = "GPL-3.0-or-later" }
+requires-python = ">=3.8"
+authors = [
+    { name = "Gabriel Gama" },
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: X11 Applications :: Qt",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Utilities",
+]
+dependencies = [
+    "PyQt5>=5.15.0",
+    "keyboard>=0.13.5",
+]
+
+[project.urls]
+Homepage = "https://github.com/GabrielBaiano/key-caster"
+Repository = "https://github.com/GabrielBaiano/key-caster.git"
+Issues = "https://github.com/GabrielBaiano/key-caster/issues"
+
+[project.scripts]
+keycaster = "src.__main__:main"
+key-caster = "src.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]

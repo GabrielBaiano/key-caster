@@ -1,43 +1,72 @@
 # Key-caster
 
-A lightweight on-screen key stroke displayer for Linux, inspired by KeyCastr for macOS.
+Lightweight on-screen keystroke displayer for Linux, inspired by KeyCastr for macOS.
 
-## Setup
+Actively maintained fork of [bm-mit/key-caster](https://github.com/bm-mit/key-caster) modernized for current Linux desktops (Wayland, COSMIC, and X11) with non-root execution, per-device hardware layout resolution, and robust device hotplugging.
 
-Install dependencies:
+## Prerequisites
+
+To capture global keystrokes without `sudo`, add your user to the system `input` group:
 
 ```bash
-pip install -r requirements.txt
+sudo usermod -aG input $USER
+```
+
+Log out and log back in (or restart) for the group membership to take effect.
+
+## Installation
+
+### Via pipx (recommended)
+
+```bash
+pipx install git+https://github.com/GabrielBaiano/key-caster.git
+```
+
+### From source
+
+```bash
+git clone https://github.com/GabrielBaiano/key-caster.git
+cd key-caster
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+To run directly from source without installing:
+
+```bash
+python3 key_caster.py
 ```
 
 ## Usage
 
-Run the app preserving your desktop session environment:
-
 ```bash
-sudo -E $(which python3) key_caster.py
+keycaster
 ```
 
-> **Note**: Capturing global keystrokes across Linux/Wayland requires reading raw input events via root privileges or membership in the `input` group. Using `sudo -E` ensures your graphical session (`DISPLAY` / `WAYLAND_DISPLAY`) is preserved.
+### Command-line Options
 
-### Options
+```text
+keycaster [options]
 
-```bash
-python3 key_caster.py --help
-
-  -t, --timeout TIMEOUT     Inactivity timeout in seconds before clearing keys (default: 2.0, 0 to disable)
-  -m, --max-keys MAX_KEYS   Maximum number of simultaneous keys displayed (default: 5)
-  -s, --font-size SIZE      Font size in pixels (default: 28)
-  -o, --opacity OPACITY     Window opacity between 0.1 and 1.0 (default: 0.92)
+  -t, --timeout TIMEOUT       Inactivity timeout in seconds before clearing (default: 2.0, 0 to disable)
+  -m, --max-keys MAX_KEYS     Maximum keys displayed simultaneously (default: 5)
+  -s, --font-size SIZE        Font size in pixels (default: 32)
+  -o, --opacity OPACITY       Overlay opacity between 0.1 and 1.0 (default: 0.92)
+  -p, --position POSITION     Preset position: bottom-right, bottom-center, bottom-left, top-right, top-left, top-center, center
+  -l, --layout LAYOUT         Keyboard layout: auto, abnt2, us-intl, us (default: auto)
 ```
 
-## Controls
+## Features
 
-- **Reposition**: Click and drag the overlay with the left mouse button to place it anywhere on screen.
-- **Context Menu**: Right-click the overlay to clear keys, toggle auto-hide, or exit.
-- **Stop**: Press `Ctrl+C` in the terminal or select **Exit** in the right-click menu.
+- **Non-root execution**: Runs cleanly as a regular user via the Linux `input` group.
+- **Per-Device Layout Routing**: In `auto` mode, keystrokes are automatically mapped based on the physical hardware device. An internal laptop keyboard (ABNT2 / ThinkPad) and an external USB keyboard (US-Intl / ANSI) can be used simultaneously with accurate keycaps and dead keys.
+- **Mac Typography**: Renders modifier keys with clean symbols (`⇧`, `⌃`, `⌥`, `⌘`) and action keys (`⌫`, `⌦`, `↩`, `⇥`, `⎋`, `⎙`).
+- **Context Menu**: Right-click the overlay to clear keys, toggle auto-hide, change screen position presets, or override keyboard layouts.
+- **Draggable**: Click and drag with the left mouse button to place the overlay anywhere on screen.
+- **Wayland / COSMIC / X11**: Configured to float cleanly above windows without tiling interference or stealing input focus.
 
-## Screenshots
+## License & Credits
 
-![image](https://github.com/MIT4893-Projects/key-caster/assets/116936560/654498a7-a2ee-4c7e-8e2e-521db0449a4a)
-![image](https://github.com/MIT4893-Projects/key-caster/assets/116936560/f7438f85-feca-4941-bc18-47f0a1f4802a)
+Distributed under the GNU General Public License v3.0.
+Forked from the original project by [bm-mit](https://github.com/bm-mit/key-caster).

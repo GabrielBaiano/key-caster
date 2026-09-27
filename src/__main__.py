@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import argparse
+import os
 import signal
 import sys
 from collections import deque
@@ -9,9 +10,15 @@ from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtCore import QPoint, Qt, QThread, QTimer, pyqtSignal, pyqtSlot
 from PyQt5.QtWidgets import QApplication, QDesktopWidget, QMainWindow, QMenu
 
-from ui.CentralWidget import CentralWidget
-from ui.KeyDisplayer import KeyDisplayer
-from ui.ModKeyDisplayer import ModKeyDisplayer
+try:
+    from ui.CentralWidget import CentralWidget
+    from ui.KeyDisplayer import KeyDisplayer
+    from ui.ModKeyDisplayer import ModKeyDisplayer
+except ImportError:
+    from src.ui.CentralWidget import CentralWidget
+    from src.ui.KeyDisplayer import KeyDisplayer
+    from src.ui.ModKeyDisplayer import ModKeyDisplayer
+
 try:
     from xkb_resolver import XkbResolver, classify_keyboard_device
 except ImportError:
@@ -650,6 +657,9 @@ class MainWindow(QMainWindow):
 
 
 def main():
+    if "QT_QPA_PLATFORM" not in os.environ and os.environ.get("DISPLAY"):
+        os.environ["QT_QPA_PLATFORM"] = "xcb"
+
     parser = argparse.ArgumentParser(
         description="Key-caster: Lightweight on-screen keystroke displayer for Linux."
     )
