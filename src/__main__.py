@@ -151,6 +151,7 @@ class Worker(QThread):
     def __init__(self, layout: str = "auto"):
         super().__init__()
         self._running = True
+        self.is_auto = (layout == "auto")
         self.layout = detect_system_layout() if layout == "auto" else layout
         self.xkb_resolver = XkbResolver(layout=layout)
 
@@ -158,8 +159,20 @@ class Worker(QThread):
         self._running = False
 
     def set_layout(self, layout: str):
+        self.is_auto = (layout == "auto")
         self.layout = layout
         self.xkb_resolver = XkbResolver(layout=layout)
+
+    def refresh_auto_layout(self):
+        if self.is_auto and self.xkb_resolver and hasattr(self.xkb_resolver, "current_rmlvo"):
+            from xkb_resolver import get_system_rmlvo
+            active = get_system_rmlvo("auto")
+            cur = self.xkb_resolver.current_rmlvo
+            if (
+                active.get("layout") != cur.get("layout")
+                or active.get("variant") != cur.get("variant")
+            ):
+                self.xkb_resolver = XkbResolver(layout="auto")
 
     def run(self):
         try:
@@ -236,6 +249,8 @@ class Worker(QThread):
                 self.modifiers_updated.emit(list(e.modifiers))
             elif is_modifier and not is_key_down:
                 self.modifiers_reset.emit((e.name,))
+                if e.name in ("windows", "alt", "shift"):
+                    self.refresh_auto_layout()
 
             last = e
 
@@ -284,6 +299,12 @@ class MainWindow(QMainWindow):
         self.inactivity_timer = QTimer(self)
         self.inactivity_timer.setSingleShot(True)
         self.inactivity_timer.timeout.connect(self.on_inactivity_timeout)
+
+        # Periodic check for layout changes in active desktop session
+        self.layout_timer = QTimer(self)
+        self.layout_timer.setInterval(1500)
+        self.layout_timer.timeout.connect(self.on_check_layout_change)
+        self.layout_timer.start()
 
         # Background worker for keyboard events
         self.worker = Worker(layout=layout)
@@ -374,6 +395,11 @@ class MainWindow(QMainWindow):
         self.layout = layout
         if hasattr(self, "worker") and self.worker:
             self.worker.set_layout(layout)
+
+    @pyqtSlot()
+    def on_check_layout_change(self):
+        if hasattr(self, "worker") and self.worker:
+            self.worker.refresh_auto_layout()
 
     # Mouse drag-and-drop to position the overlay anywhere
     def mousePressEvent(self, event):

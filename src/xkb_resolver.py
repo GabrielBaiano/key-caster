@@ -253,6 +253,7 @@ class XkbResolver:
             return
 
         self.shift_idx = self.xkb.xkb_keymap_mod_get_index(self.keymap, b"Shift")
+        self.current_rmlvo = rmlvo
         self.available = True
 
     def resolve(self, scan_code: int, is_shift: bool = False) -> Optional[Dict[str, str]]:
