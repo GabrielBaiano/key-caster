@@ -20,15 +20,57 @@ except ImportError:
 
 def patch_keyboard_linux():
     """
-    Patches keyboard library internals on Linux so non-root users
-    in the 'input' group can read evdev events without requiring sudo.
+    Patches keyboard library internals on Linux:
+    1. Bypasses root checks for users in the 'input' group.
+    2. Gracefully handles stale or disconnected USB devices without exit() or unhandled tracebacks.
+    3. Handles dumpkeys console failures cleanly when unprivileged.
     """
     try:
+        import queue
+        import threading
         import keyboard._nixcommon as nc
         import keyboard._nixkeyboard as nk
 
         nc.ensure_root = lambda: None
         nk.ensure_root = lambda: None
+
+        orig_event_device = nc.EventDevice
+
+        class RobustEventDevice(orig_event_device):
+            @property
+            def input_file(self):
+                if self._input_file is None:
+                    try:
+                        self._input_file = open(self.path, "rb")
+                    except (IOError, OSError):
+                        return None
+                return self._input_file
+
+        class RobustAggregatedEventDevice(object):
+            def __init__(self, devices, output=None):
+                self.event_queue = queue.Queue()
+                self.devices = [d for d in devices if d.input_file is not None]
+                self.output = output or (self.devices[0] if self.devices else None)
+
+                def start_reading(device):
+                    while True:
+                        try:
+                            event = device.read_event()
+                            self.event_queue.put(event)
+                        except (OSError, IOError):
+                            # USB device disconnected or removed, exit reader thread cleanly
+                            break
+
+                for device in self.devices:
+                    thread = threading.Thread(target=start_reading, args=[device])
+                    thread.daemon = True
+                    thread.start()
+
+            def read_event(self):
+                return self.event_queue.get(block=True)
+
+        nc.EventDevice = RobustEventDevice
+        nc.AggregatedEventDevice = RobustAggregatedEventDevice
 
         orig_build_tables = nk.build_tables
 
