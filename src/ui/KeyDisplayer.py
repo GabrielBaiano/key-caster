@@ -11,7 +11,7 @@ class KeyDisplayer(QLabel):
         self.setAlignment(Qt.AlignCenter)
         self.setStyleSheet(
             f"color: #ffffff; font-size: {font_size}px; font-weight: normal; "
-            "font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; "
+            "font-family: -apple-system, BlinkMacSystemFont, 'DejaVu Sans', 'FiraCode Nerd Font', 'Segoe UI', Roboto, sans-serif; "
             "background: transparent;"
         )
 
