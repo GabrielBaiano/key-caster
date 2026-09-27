@@ -176,6 +176,11 @@ class Worker(QThread):
 
     def run(self):
         try:
+            try:
+                import keyboard._nixcommon as _nixcommon
+                _nixcommon.ensure_root = lambda: None
+            except Exception:
+                pass
             import keyboard
         except ImportError as exc:
             self.error_occurred.emit(
@@ -189,8 +194,9 @@ class Worker(QThread):
         except Exception as exc:
             self.error_occurred.emit(
                 f"Keyboard access error: {exc}\n"
-                "Make sure to run with necessary permissions:\n"
-                "  sudo -E $(which python3) key_caster.py"
+                "To run without sudo, add your user to the input group:\n"
+                "  sudo usermod -aG input $USER\n"
+                "(then log out and log back in)"
             )
             return
 

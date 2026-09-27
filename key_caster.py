@@ -5,8 +5,9 @@ Key-caster: Lightweight on-screen key stroke displayer for Linux.
 import os
 import sys
 
-# Auto-detect local virtualenv if current interpreter lacks dependencies
-venv_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".venv")
+# Auto-detect local virtualenv if current interpreter lacks dependencies (resolving symlinks)
+script_dir = os.path.dirname(os.path.realpath(__file__))
+venv_dir = os.path.join(script_dir, ".venv")
 venv_python = os.path.join(venv_dir, "bin", "python3")
 
 if os.path.exists(venv_python) and sys.prefix != venv_dir:
@@ -23,7 +24,7 @@ if "QT_QPA_PLATFORM" not in os.environ and os.environ.get("DISPLAY"):
     os.environ["QT_QPA_PLATFORM"] = "xcb"
 
 # Ensure 'src' is available in Python path
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "src"))
+sys.path.insert(0, os.path.join(script_dir, "src"))
 
 try:
     from src.__main__ import main
