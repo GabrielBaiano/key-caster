@@ -2,7 +2,11 @@
 
 Lightweight on-screen keystroke displayer for Linux, inspired by KeyCastr for macOS.
 
-Actively maintained fork of [bm-mit/key-caster](https://github.com/bm-mit/key-caster) modernized for current Linux desktops (Wayland, COSMIC, and X11) with non-root execution, per-device hardware layout resolution, and robust device hotplugging.
+Independent project based on the original work by [bm-mit/key-caster](https://github.com/bm-mit/key-caster), modernized and actively maintained for current Linux desktops (Wayland, COSMIC, and X11) with non-root execution, per-device hardware layout routing, and robust device hotplugging.
+
+## Demo
+
+![Key-caster Demo](assets/demo.gif)
 
 ## Prerequisites
 
@@ -69,4 +73,4 @@ keycaster [options]
 ## License & Credits
 
 Distributed under the GNU General Public License v3.0.
-Forked from the original project by [bm-mit](https://github.com/bm-mit/key-caster).
+Originally created by [bm-mit](https://github.com/bm-mit/key-caster).
