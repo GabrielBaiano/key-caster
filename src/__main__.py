@@ -18,6 +18,46 @@ except ImportError:
     from src.xkb_resolver import XkbResolver
 
 
+def patch_keyboard_linux():
+    """
+    Patches keyboard library internals on Linux so non-root users
+    in the 'input' group can read evdev events without requiring sudo.
+    """
+    try:
+        import keyboard._nixcommon as nc
+        import keyboard._nixkeyboard as nk
+
+        nc.ensure_root = lambda: None
+        nk.ensure_root = lambda: None
+
+        orig_build_tables = nk.build_tables
+
+        def safe_build_tables():
+            try:
+                orig_build_tables()
+            except Exception:
+                mods = {
+                    42: "shift",
+                    54: "shift",
+                    29: "ctrl",
+                    97: "ctrl",
+                    56: "alt",
+                    100: "alt gr",
+                    125: "windows",
+                    126: "windows",
+                    58: "caps lock",
+                }
+                for sc, name in mods.items():
+                    nk.register_key((sc, ()), name)
+
+        nk.build_tables = safe_build_tables
+    except Exception:
+        pass
+
+
+patch_keyboard_linux()
+
+
 def detect_system_layout() -> str:
     import subprocess
     try:
@@ -175,12 +215,8 @@ class Worker(QThread):
                 self.xkb_resolver = XkbResolver(layout="auto")
 
     def run(self):
+        patch_keyboard_linux()
         try:
-            try:
-                import keyboard._nixcommon as _nixcommon
-                _nixcommon.ensure_root = lambda: None
-            except Exception:
-                pass
             import keyboard
         except ImportError as exc:
             self.error_occurred.emit(
