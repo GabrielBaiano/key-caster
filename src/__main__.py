@@ -13,9 +13,9 @@ from ui.CentralWidget import CentralWidget
 from ui.KeyDisplayer import KeyDisplayer
 from ui.ModKeyDisplayer import ModKeyDisplayer
 try:
-    from xkb_resolver import XkbResolver
+    from xkb_resolver import XkbResolver, classify_keyboard_device
 except ImportError:
-    from src.xkb_resolver import XkbResolver
+    from src.xkb_resolver import XkbResolver, classify_keyboard_device
 
 
 def patch_keyboard_linux():
@@ -138,6 +138,7 @@ class Worker(QThread):
     space_pressed = pyqtSignal()
     modifiers_updated = pyqtSignal(list)
     modifiers_reset = pyqtSignal(tuple)
+    layout_switched = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
 
     map_keys = {
@@ -234,8 +235,28 @@ class Worker(QThread):
         super().__init__()
         self._running = True
         self.is_auto = (layout == "auto")
-        self.layout = detect_system_layout() if layout == "auto" else layout
-        self.xkb_resolver = XkbResolver(layout=layout)
+        self.layout = layout
+        self.active_auto_layout = "abnt2"
+
+        # Piscina de resolvers em cache para trocar de layout na velocidade da luz
+        self.resolvers = {
+            "abnt2": XkbResolver(layout="abnt2"),
+            "us-intl": XkbResolver(layout="us-intl"),
+            "us": XkbResolver(layout="us"),
+        }
+        if layout not in self.resolvers and layout != "auto":
+            self.resolvers[layout] = XkbResolver(layout=layout)
+        self.device_layout_cache = {}
+
+    @property
+    def xkb_resolver(self):
+        if not self.is_auto:
+            return self.resolvers.get(self.layout, self.resolvers["abnt2"])
+        return self.resolvers.get(self.active_auto_layout, self.resolvers["abnt2"])
+
+    @xkb_resolver.setter
+    def xkb_resolver(self, val):
+        self.resolvers[self.layout] = val
 
     def stop(self):
         self._running = False
@@ -243,18 +264,36 @@ class Worker(QThread):
     def set_layout(self, layout: str):
         self.is_auto = (layout == "auto")
         self.layout = layout
-        self.xkb_resolver = XkbResolver(layout=layout)
+        if layout not in self.resolvers and layout != "auto":
+            self.resolvers[layout] = XkbResolver(layout=layout)
+        self.device_layout_cache.clear()
+        self.layout_switched.emit(layout)
 
     def refresh_auto_layout(self):
-        if self.is_auto and self.xkb_resolver and hasattr(self.xkb_resolver, "current_rmlvo"):
-            from xkb_resolver import get_system_rmlvo
-            active = get_system_rmlvo("auto")
-            cur = self.xkb_resolver.current_rmlvo
-            if (
-                active.get("layout") != cur.get("layout")
-                or active.get("variant") != cur.get("variant")
-            ):
-                self.xkb_resolver = XkbResolver(layout="auto")
+        # Compatibilidade com timer/modifiers sem resetar resolvers desnecessariamente
+        pass
+
+    def get_resolver(self, event) -> XkbResolver:
+        """
+        Determina dinamicamente o resolver correto para o evento:
+        - Se o usuário fixou o layout manualmente (ex: 'us-intl' ou 'abnt2'), respeita o override.
+        - Se está em 'auto', detecta o hardware do teclado que gerou o clique (Laptop vs Akko/USB).
+        """
+        if not self.is_auto:
+            return self.resolvers.get(self.layout, self.resolvers["abnt2"])
+
+        dev_path = getattr(event, "device", None)
+        if not dev_path:
+            return self.resolvers.get(self.active_auto_layout, self.resolvers["abnt2"])
+
+        if dev_path not in self.device_layout_cache:
+            detected = classify_keyboard_device(dev_path)
+            self.device_layout_cache[dev_path] = (
+                detected if detected != "auto" else self.active_auto_layout
+            )
+
+        target = self.device_layout_cache[dev_path]
+        return self.resolvers.get(target, self.resolvers["abnt2"])
 
     def run(self):
         patch_keyboard_linux()
@@ -297,7 +336,19 @@ class Worker(QThread):
             )
             is_shift = "shift" in e.modifiers
 
-            resolved = self.xkb_resolver.resolve(e.scan_code, is_shift=is_shift)
+            # Atalho de troca de layout do desktop (Super+Space ou Alt+Shift)
+            if is_key_down and not is_holding and self.is_auto:
+                if ("windows" in e.modifiers or "alt" in e.modifiers) and e.scan_code == 57:
+                    new_layout = "us-intl" if self.active_auto_layout == "abnt2" else "abnt2"
+                    self.active_auto_layout = new_layout
+                    for d, l in list(self.device_layout_cache.items()):
+                        if l in ("abnt2", "us-intl"):
+                            # Atualiza layout de dispositivos desconhecidos
+                            pass
+                    self.layout_switched.emit(new_layout)
+
+            resolver = self.get_resolver(e)
+            resolved = resolver.resolve(e.scan_code, is_shift=is_shift)
 
             if resolved:
                 if resolved["type"] == "modifier":
@@ -311,7 +362,7 @@ class Worker(QThread):
             else:
                 if not is_modifier and is_key_down and not is_holding:
                     raw_name = e.name
-                    # Se o dumpkeys cuspir 'unknown', joga essa m#@! fora em vez de poluir a tela
+                    # Se o dumpkeys cuspir 'unknown', joga fora
                     if raw_name != "unknown":
                         if is_shift:
                             active_table = self.shift_maps.get(
@@ -333,8 +384,6 @@ class Worker(QThread):
                 self.modifiers_updated.emit(list(e.modifiers))
             elif is_modifier and not is_key_down:
                 self.modifiers_reset.emit((e.name,))
-                if e.name in ("windows", "alt", "shift"):
-                    self.refresh_auto_layout()
 
             last = e
 
@@ -396,10 +445,16 @@ class MainWindow(QMainWindow):
         self.worker.space_pressed.connect(self.on_space_pressed)
         self.worker.modifiers_updated.connect(self.on_modifiers_updated)
         self.worker.modifiers_reset.connect(self.on_modifiers_reset)
+        self.worker.layout_switched.connect(self.on_layout_switched)
         self.worker.error_occurred.connect(self.on_worker_error)
 
         if start_worker:
             self.worker.start()
+
+    @pyqtSlot(str)
+    def on_layout_switched(self, layout: str):
+        if hasattr(self, "worker") and not self.worker.is_auto:
+            self.layout = layout
 
     def location_on_the_screen(self, position: str = "bottom-right", margin_x: int = 40, margin_y: int = 60):
         screen = QApplication.primaryScreen()
@@ -524,10 +579,25 @@ class MainWindow(QMainWindow):
 
         layout_menu = menu.addMenu("Keyboard Layout")
         layout_menu.setStyleSheet(menu.styleSheet())
-        l_auto = layout_menu.addAction("Auto (System Active)")
+        l_group = QtWidgets.QActionGroup(self)
+        l_auto = layout_menu.addAction("Auto (Per-Device: Notebook=BR, External=US)")
         l_us_intl = layout_menu.addAction("US International (alt-intl)")
         l_abnt2 = layout_menu.addAction("BR ABNT2 (ThinkPad)")
         l_us = layout_menu.addAction("US Standard")
+
+        for act in (l_auto, l_us_intl, l_abnt2, l_us):
+            act.setCheckable(True)
+            l_group.addAction(act)
+
+        current = "auto" if (hasattr(self, "worker") and self.worker.is_auto) else self.layout
+        if current == "auto":
+            l_auto.setChecked(True)
+        elif current in ("us-intl", "intl", "alt-intl"):
+            l_us_intl.setChecked(True)
+        elif current in ("abnt2", "br"):
+            l_abnt2.setChecked(True)
+        elif current == "us":
+            l_us.setChecked(True)
 
         pos_menu = menu.addMenu("Position")
         pos_menu.setStyleSheet(menu.styleSheet())

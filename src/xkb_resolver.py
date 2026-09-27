@@ -117,6 +117,41 @@ def get_system_rmlvo(user_layout: str = "auto") -> Dict[str, Optional[bytes]]:
     }
 
 
+_device_name_cache: Dict[str, str] = {}
+
+
+def get_device_name(dev_path: Optional[str]) -> str:
+    """Reads Linux sysfs device name from an event device path (/dev/input/eventX)."""
+    if not dev_path:
+        return ""
+    if dev_path not in _device_name_cache:
+        base = os.path.basename(dev_path)
+        sys_path = f"/sys/class/input/{base}/device/name"
+        if os.path.exists(sys_path):
+            try:
+                with open(sys_path, "r", errors="ignore") as f:
+                    _device_name_cache[dev_path] = f.read().strip()
+            except Exception:
+                _device_name_cache[dev_path] = ""
+        else:
+            _device_name_cache[dev_path] = ""
+    return _device_name_cache[dev_path]
+
+
+def classify_keyboard_device(dev_path: Optional[str]) -> str:
+    """
+    Identifies the physical keyboard layout from its hardware name:
+    - Laptop built-in (ThinkPad / IdeaPad / Lenovo / AT Translated): 'abnt2'
+    - External USB/Bluetooth keyboard (Akko, ANSI, USB): 'us-intl'
+    """
+    name = get_device_name(dev_path).lower()
+    if any(k in name for k in ("thinkpad", "at translated", "ideapad", "laptop", "abnt")):
+        return "abnt2"
+    if any(k in name for k in ("akko", "usb", "ansi", "gaming", "royuan", "keyboard")):
+        return "us-intl"
+    return "auto"
+
+
 class XkbResolver:
     DEAD_KEYS: Dict[str, str] = {
         "dead_tilde": "~",
@@ -141,6 +176,7 @@ class XkbResolver:
         "ISO_Left_Tab": "⇥",
         "Return": "↩",
         "Delete": "⌦",
+        "Insert": "Ins",
         "Caps_Lock": "⇪",
         "Up": "↑",
         "Down": "↓",
@@ -152,6 +188,9 @@ class XkbResolver:
         "Next": "⇟",
         "Print": "⎙",
         "Sys_Req": "⎙",
+        "Pause": "Pause",
+        "Scroll_Lock": "⤓",
+        "Menu": "☰",
     }
 
     MODIFIER_SYMS: Dict[str, str] = {
@@ -171,6 +210,7 @@ class XkbResolver:
     def __init__(self, layout: str = "auto"):
         self.available = False
         self.xkb = None
+        self.layout = layout
         self._init_xkb(layout)
 
     def _init_xkb(self, layout: str):
@@ -291,6 +331,17 @@ class XkbResolver:
         # Dead keys nao cospem UTF-8 direto nessa p#@!, xkb_state_key_get_utf8 retorna vazio.
         # Tem que traduzir na marra:
         if sym_name in self.DEAD_KEYS:
+            is_us = (self.layout in ("us-intl", "intl", "alt-intl", "us")) or (
+                hasattr(self, "current_rmlvo")
+                and self.current_rmlvo
+                and self.current_rmlvo.get("layout") == b"us"
+            )
+            if is_us:
+                if sym_name == "dead_acute":
+                    return {"type": "char", "name": "'"}
+                elif sym_name == "dead_diaeresis":
+                    return {"type": "char", "name": '"'}
+
             return {"type": "char", "name": self.DEAD_KEYS[sym_name]}
 
         utf_buf = ctypes.create_string_buffer(64)

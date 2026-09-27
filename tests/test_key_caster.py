@@ -206,3 +206,78 @@ def test_main_window_switch_layout(qapp):
     win.set_keyboard_layout("abnt2")
     assert win.layout == "abnt2"
     assert win.worker.layout == "abnt2"
+
+
+def test_classify_keyboard_device(monkeypatch):
+    from xkb_resolver import classify_keyboard_device
+
+    monkeypatch.setattr(
+        "xkb_resolver.get_device_name",
+        lambda p: "AT Translated Set 2 keyboard" if p.endswith("/event2") else "ROYUAN Akko keyboard",
+    )
+
+    assert classify_keyboard_device("/dev/input/event2") == "abnt2"
+    assert classify_keyboard_device("/dev/input/event21") == "us-intl"
+
+
+def test_xkb_resolver_dead_keys_us_intl():
+    from xkb_resolver import XkbResolver
+
+    resolver = XkbResolver(layout="us-intl")
+    assert resolver.available
+
+    # Scancode 40 (apostrophe / quote key next to Enter):
+    # Must resolve cleanly to ' and " instead of dead acute / diaeresis
+    res_40 = resolver.resolve(40, is_shift=False)
+    assert res_40 == {"type": "char", "name": "'"}
+    res_40_s = resolver.resolve(40, is_shift=True)
+    assert res_40_s == {"type": "char", "name": '"'}
+
+    # Scancode 41 (grave / tilde key under ESC)
+    res_41 = resolver.resolve(41, is_shift=False)
+    assert res_41 == {"type": "char", "name": "`"}
+    res_41_s = resolver.resolve(41, is_shift=True)
+    assert res_41_s == {"type": "char", "name": "~"}
+
+
+def test_xkb_resolver_dead_keys_abnt2():
+    from xkb_resolver import XkbResolver
+
+    resolver = XkbResolver(layout="abnt2")
+    assert resolver.available
+
+    # Scancode 40 on ABNT2 ThinkPad is the tilde key next to Ç
+    res_40 = resolver.resolve(40, is_shift=False)
+    assert res_40 == {"type": "char", "name": "~"}
+    res_40_s = resolver.resolve(40, is_shift=True)
+    assert res_40_s == {"type": "char", "name": "^"}
+
+    # Scancode 26 on ABNT2 ThinkPad is acute / grave next to P
+    res_26 = resolver.resolve(26, is_shift=False)
+    assert res_26 == {"type": "char", "name": "´"}
+    res_26_s = resolver.resolve(26, is_shift=True)
+    assert res_26_s == {"type": "char", "name": "`"}
+
+
+def test_worker_per_device_resolution(monkeypatch):
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        "xkb_resolver.get_device_name",
+        lambda p: "AT Translated Set 2 keyboard" if p.endswith("/event2") else "ROYUAN Akko keyboard",
+    )
+
+    worker = Worker(layout="auto")
+
+    event_laptop = SimpleNamespace(device="/dev/input/event2", scan_code=40)
+    event_akko = SimpleNamespace(device="/dev/input/event21", scan_code=40)
+
+    res_laptop = worker.get_resolver(event_laptop)
+    res_akko = worker.get_resolver(event_akko)
+
+    # Scancode 40 on laptop (ABNT2 ThinkPad) produces ~
+    assert res_laptop.resolve(40, is_shift=False) == {"type": "char", "name": "~"}
+
+    # Scancode 40 on Akko (US-Intl ANSI) produces '
+    assert res_akko.resolve(40, is_shift=False) == {"type": "char", "name": "'"}
+
