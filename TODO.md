@@ -6,11 +6,12 @@ Tracking improvements, community feedback, and architectural tasks for Key-caste
 
 ## High Priority
 
-- [ ] **Privacy & Password Masking** ([#1](https://github.com/GabrielBaiano/key-caster/issues/1))
-  - [ ] Implement global pause/resume toggle shortcut (`Super+Shift+P`).
-  - [ ] Add pause toggle in overlay context menu.
-  - [ ] Add visual paused indicator (subtle amber/red dot on the card).
-  - [ ] Add optional terminal password masking (convert rapid typing sequences to `•••••`).
+- [x] **Privacy & Password Masking** ([#1](https://github.com/GabrielBaiano/key-caster/issues/1))
+  - [x] Implement global pause/resume toggle shortcut (`Super+Shift+P` / `Alt+Shift+P`).
+  - [x] Add pause toggle in overlay context menu.
+  - [x] Add visual paused indicator (`⏸ PAUSED` warning label on the card).
+  - [x] Add privacy masking mode (`Super+Shift+S` / `Alt+Shift+S`) converting characters to bullets (`•`).
+  - [x] Add `--paused` and `--privacy` CLI flags.
 
 - [ ] **Fix USB Keyboard Classification Heuristic** ([#4](https://github.com/GabrielBaiano/key-caster/issues/4))
   - [ ] Remove broad keywords (`"keyboard"`, `"usb"`) from `classify_keyboard_device` in `src/xkb_resolver.py`.
