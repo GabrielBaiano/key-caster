@@ -147,6 +147,8 @@ class Worker(QThread):
     modifiers_reset = pyqtSignal(tuple)
     layout_switched = pyqtSignal(str)
     error_occurred = pyqtSignal(str)
+    pause_toggled = pyqtSignal(bool)
+    privacy_toggled = pyqtSignal(bool)
 
     map_keys = {
         "backspace": "⌫",
@@ -238,12 +240,14 @@ class Worker(QThread):
     }
     shift_maps["br"] = shift_maps["abnt2"]
 
-    def __init__(self, layout: str = "auto"):
+    def __init__(self, layout: str = "auto", paused: bool = False, privacy: bool = False):
         super().__init__()
         self._running = True
         self.is_auto = (layout == "auto")
         self.layout = layout
         self.active_auto_layout = "abnt2"
+        self.is_paused = paused
+        self.is_privacy = privacy
 
         # Piscina de resolvers em cache para trocar de layout na velocidade da luz
         self.resolvers = {
@@ -254,6 +258,22 @@ class Worker(QThread):
         if layout not in self.resolvers and layout != "auto":
             self.resolvers[layout] = XkbResolver(layout=layout)
         self.device_layout_cache = {}
+
+    def set_paused(self, paused: bool):
+        if self.is_paused != paused:
+            self.is_paused = paused
+            self.pause_toggled.emit(self.is_paused)
+
+    def toggle_pause(self):
+        self.set_paused(not self.is_paused)
+
+    def set_privacy(self, privacy: bool):
+        if self.is_privacy != privacy:
+            self.is_privacy = privacy
+            self.privacy_toggled.emit(self.is_privacy)
+
+    def toggle_privacy(self):
+        self.set_privacy(not self.is_privacy)
 
     @property
     def xkb_resolver(self):
@@ -342,10 +362,11 @@ class Worker(QThread):
                 and last.scan_code == e.scan_code
             )
             is_shift = "shift" in e.modifiers
+            has_super_or_alt = ("windows" in e.modifiers or "alt" in e.modifiers)
 
             # Atalho de troca de layout do desktop (Super+Space ou Alt+Shift)
             if is_key_down and not is_holding and self.is_auto:
-                if ("windows" in e.modifiers or "alt" in e.modifiers) and e.scan_code == 57:
+                if has_super_or_alt and e.scan_code == 57:
                     new_layout = "us-intl" if self.active_auto_layout == "abnt2" else "abnt2"
                     self.active_auto_layout = new_layout
                     for d, l in list(self.device_layout_cache.items()):
@@ -353,6 +374,25 @@ class Worker(QThread):
                             # Atualiza layout de dispositivos desconhecidos
                             pass
                     self.layout_switched.emit(new_layout)
+
+            # Atalho de Pause / Resume: Super+Shift+P ou Alt+Shift+P (scancode 25)
+            if is_key_down and not is_holding and has_super_or_alt and is_shift and (e.scan_code == 25 or e.name == "p"):
+                self.is_paused = not self.is_paused
+                self.pause_toggled.emit(self.is_paused)
+                last = e
+                continue
+
+            # Atalho de Privacidade / Mascaramento: Super+Shift+S ou Alt+Shift+S (scancode 31)
+            if is_key_down and not is_holding and has_super_or_alt and is_shift and (e.scan_code == 31 or e.name == "s"):
+                self.is_privacy = not self.is_privacy
+                self.privacy_toggled.emit(self.is_privacy)
+                last = e
+                continue
+
+            # Se estiver pausado, silencia a captura
+            if self.is_paused:
+                last = e
+                continue
 
             resolver = self.get_resolver(e)
             resolved = resolver.resolve(e.scan_code, is_shift=is_shift)
@@ -364,7 +404,8 @@ class Worker(QThread):
                     if resolved["type"] == "space":
                         self.space_pressed.emit()
                     else:
-                        self.key_pressed.emit(resolved["name"])
+                        label = "•" if (self.is_privacy and resolved["type"] == "char") else resolved["name"]
+                        self.key_pressed.emit(label)
                     self.modifiers_updated.emit(list(e.modifiers))
             else:
                 if not is_modifier and is_key_down and not is_holding:
@@ -384,6 +425,8 @@ class Worker(QThread):
                             self.space_pressed.emit()
                         else:
                             key_label = self.map_keys.get(raw_name, raw_name)
+                            if self.is_privacy and key_label not in self.map_keys.values():
+                                key_label = "•"
                             self.key_pressed.emit(key_label)
                     self.modifiers_updated.emit(list(e.modifiers))
 
@@ -404,12 +447,16 @@ class MainWindow(QMainWindow):
         opacity: float = 0.92,
         layout: str = "auto",
         start_worker: bool = True,
+        paused: bool = False,
+        privacy: bool = False,
     ):
         super().__init__()
 
         self.timeout = timeout
         self.max_keys = max_keys
         self.layout = layout
+        self.is_paused = paused
+        self.is_privacy = privacy
         self._drag_pos = QPoint()
 
         self.setWindowTitle("Key-caster")
@@ -447,13 +494,18 @@ class MainWindow(QMainWindow):
         self.layout_timer.start()
 
         # Background worker for keyboard events
-        self.worker = Worker(layout=layout)
+        self.worker = Worker(layout=layout, paused=paused, privacy=privacy)
         self.worker.key_pressed.connect(self.on_key_pressed)
         self.worker.space_pressed.connect(self.on_space_pressed)
         self.worker.modifiers_updated.connect(self.on_modifiers_updated)
         self.worker.modifiers_reset.connect(self.on_modifiers_reset)
         self.worker.layout_switched.connect(self.on_layout_switched)
         self.worker.error_occurred.connect(self.on_worker_error)
+        self.worker.pause_toggled.connect(self.on_pause_toggled)
+        self.worker.privacy_toggled.connect(self.on_privacy_toggled)
+
+        if self.is_paused:
+            self.key_dis.set_paused(True)
 
         if start_worker:
             self.worker.start()
@@ -497,6 +549,8 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(str)
     def on_key_pressed(self, key_label: str):
+        if self.is_paused:
+            return
         self.key_dis.add_key(key_label)
         if not self.isVisible():
             self.show()
@@ -505,17 +559,45 @@ class MainWindow(QMainWindow):
 
     @pyqtSlot(list)
     def on_modifiers_updated(self, modifiers: list):
+        if self.is_paused:
+            return
         self.mod_dis.set_modifiers(modifiers)
         if self.timeout > 0:
             self.inactivity_timer.start(int(self.timeout * 1000))
 
     @pyqtSlot(tuple)
     def on_modifiers_reset(self, modifiers: tuple):
+        if self.is_paused:
+            return
         self.mod_dis.reset_modifiers(modifiers)
 
     @pyqtSlot()
     def on_space_pressed(self):
+        if self.is_paused:
+            return
         self.clear_display()
+
+    @pyqtSlot(bool)
+    def on_pause_toggled(self, is_paused: bool):
+        self.is_paused = is_paused
+        self.clear_display()
+        self.key_dis.set_paused(is_paused)
+
+    @pyqtSlot(bool)
+    def on_privacy_toggled(self, is_privacy: bool):
+        self.is_privacy = is_privacy
+
+    def toggle_pause(self):
+        if hasattr(self, "worker") and self.worker:
+            self.worker.toggle_pause()
+        else:
+            self.on_pause_toggled(not self.is_paused)
+
+    def toggle_privacy(self):
+        if hasattr(self, "worker") and self.worker:
+            self.worker.toggle_privacy()
+        else:
+            self.on_privacy_toggled(not self.is_privacy)
 
     @pyqtSlot()
     def on_inactivity_timeout(self):
@@ -584,6 +666,12 @@ class MainWindow(QMainWindow):
         auto_hide_text = "Disable Auto-Hide" if self.timeout > 0 else "Enable Auto-Hide"
         toggle_act = menu.addAction(auto_hide_text)
 
+        pause_text = "Resume Capturing (Super+Shift+P)" if self.is_paused else "Pause Capturing (Super+Shift+P)"
+        pause_act = menu.addAction(pause_text)
+
+        privacy_text = "Disable Privacy Masking (Super+Shift+S)" if self.is_privacy else "Enable Privacy Masking (Super+Shift+S)"
+        privacy_act = menu.addAction(privacy_text)
+
         layout_menu = menu.addMenu("Keyboard Layout")
         layout_menu.setStyleSheet(menu.styleSheet())
         l_group = QtWidgets.QActionGroup(self)
@@ -626,6 +714,10 @@ class MainWindow(QMainWindow):
             self.clear_display()
         elif action == toggle_act:
             self.toggle_auto_hide()
+        elif action == pause_act:
+            self.toggle_pause()
+        elif action == privacy_act:
+            self.toggle_privacy()
         elif action == l_auto:
             self.set_keyboard_layout("auto")
         elif action == l_us_intl:
@@ -715,6 +807,18 @@ def main():
         choices=["auto", "abnt2", "br", "us-intl", "us"],
         help="Keyboard layout for shift mappings (default: auto)",
     )
+    parser.add_argument(
+        "--paused",
+        action="store_true",
+        default=False,
+        help="Start application with key capturing paused",
+    )
+    parser.add_argument(
+        "--privacy",
+        action="store_true",
+        default=False,
+        help="Start application with privacy masking enabled (display bullets)",
+    )
 
     args = parser.parse_args()
 
@@ -732,6 +836,8 @@ def main():
         font_size=args.font_size,
         opacity=args.opacity,
         layout=args.layout,
+        paused=args.paused,
+        privacy=args.privacy,
     )
     window.location_on_the_screen(position=args.position)
     window.show()

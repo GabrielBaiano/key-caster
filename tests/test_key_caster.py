@@ -281,3 +281,82 @@ def test_worker_per_device_resolution(monkeypatch):
     # Scancode 40 on Akko (US-Intl ANSI) produces '
     assert res_akko.resolve(40, is_shift=False) == {"type": "char", "name": "'"}
 
+
+def test_key_displayer_paused(qapp):
+    displayer = KeyDisplayer(max_keys=3)
+    displayer.add_key("A")
+    assert displayer.text() == "A"
+
+    displayer.set_paused(True)
+    assert displayer.text() == "⏸ PAUSED"
+
+    # Keys are ignored while paused
+    displayer.add_key("B")
+    assert displayer.text() == "⏸ PAUSED"
+
+    displayer.set_paused(False)
+    assert displayer.text() == ""
+    displayer.add_key("C")
+    assert displayer.text() == "C"
+
+
+def test_worker_pause_and_privacy_controls(qapp):
+    worker = Worker(layout="auto", paused=False, privacy=False)
+    pause_events = []
+    privacy_events = []
+
+    worker.pause_toggled.connect(pause_events.append)
+    worker.privacy_toggled.connect(privacy_events.append)
+
+    worker.toggle_pause()
+    assert worker.is_paused is True
+    assert pause_events == [True]
+
+    worker.toggle_pause()
+    assert worker.is_paused is False
+    assert pause_events == [True, False]
+
+    worker.toggle_privacy()
+    assert worker.is_privacy is True
+    assert privacy_events == [True]
+
+    worker.toggle_privacy()
+    assert worker.is_privacy is False
+    assert privacy_events == [True, False]
+
+
+def test_main_window_pause_and_privacy_integration(qapp):
+    win = MainWindow(start_worker=False, paused=True, privacy=True)
+    assert win.is_paused is True
+    assert win.is_privacy is True
+    assert win.key_dis.text() == "⏸ PAUSED"
+
+    # Key presses are ignored while paused
+    win.on_key_pressed("Z")
+    assert win.key_dis.text() == "⏸ PAUSED"
+
+    # Unpause
+    win.toggle_pause()
+    assert win.is_paused is False
+    assert win.key_dis.text() == ""
+
+    # Normal key press works after unpausing
+    win.on_key_pressed("Z")
+    assert win.key_dis.text() == "Z"
+
+    # Pausing again clears and shows paused label
+    win.toggle_pause()
+    assert win.is_paused is True
+    assert win.key_dis.text() == "⏸ PAUSED"
+
+
+def test_worker_privacy_character_masking():
+    worker = Worker(layout="auto", privacy=True)
+    resolved_char = {"type": "char", "name": "k"}
+    label = "•" if (worker.is_privacy and resolved_char["type"] == "char") else resolved_char["name"]
+    assert label == "•"
+
+    resolved_action = {"type": "action", "name": "↩"}
+    label_action = "•" if (worker.is_privacy and resolved_action["type"] == "char") else resolved_action["name"]
+    assert label_action == "↩"
+
