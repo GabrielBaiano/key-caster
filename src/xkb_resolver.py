@@ -142,12 +142,16 @@ def classify_keyboard_device(dev_path: Optional[str]) -> str:
     """
     Identifies the physical keyboard layout from its hardware name:
     - Laptop built-in (ThinkPad / IdeaPad / Lenovo / AT Translated): 'abnt2'
-    - External USB/Bluetooth keyboard (Akko, ANSI, USB): 'us-intl'
+    - Known ANSI external keyboards (Akko, ANSI, Royuan, Keychron, Ducky): 'us-intl'
+    - Generic external keyboards: 'auto' (defers to active desktop layout)
     """
     name = get_device_name(dev_path).lower()
+    if not name:
+        return "auto"
+
     if any(k in name for k in ("thinkpad", "at translated", "ideapad", "laptop", "abnt")):
         return "abnt2"
-    if any(k in name for k in ("akko", "usb", "ansi", "gaming", "royuan", "keyboard")):
+    if any(k in name for k in ("akko", "ansi", "royuan", "keychron", "ducky")):
         return "us-intl"
     return "auto"
 

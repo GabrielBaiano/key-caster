@@ -13,10 +13,10 @@ Tracking improvements, community feedback, and architectural tasks for Key-caste
   - [x] Add privacy masking mode (`Super+Shift+S` / `Alt+Shift+S`) converting characters to bullets (`•`).
   - [x] Add `--paused` and `--privacy` CLI flags.
 
-- [ ] **Fix USB Keyboard Classification Heuristic** ([#4](https://github.com/GabrielBaiano/key-caster/issues/4))
-  - [ ] Remove broad keywords (`"keyboard"`, `"usb"`) from `classify_keyboard_device` in `src/xkb_resolver.py`.
-  - [ ] Fall back to system's active RMLVO layout (`get_system_rmlvo`) when device hardware name is ambiguous.
-  - [ ] Add unit tests verifying external ABNT2 keyboards are not falsely resolved as `us-intl`.
+- [x] **Fix USB Keyboard Classification Heuristic** ([#4](https://github.com/GabrielBaiano/key-caster/issues/4))
+  - [x] Remove broad keywords (`"keyboard"`, `"usb"`) from `classify_keyboard_device` in `src/xkb_resolver.py`.
+  - [x] Fall back to system's active RMLVO layout (`get_system_rmlvo`) when device hardware name is ambiguous.
+  - [x] Add unit tests verifying external ABNT2 keyboards are not falsely resolved as `us-intl`.
 
 - [ ] **Dynamic Card Width & Text Truncation** ([#7](https://github.com/GabrielBaiano/key-caster/issues/7))
   - [ ] Replace `setFixedSize(220, 100)` with `setMinimumSize(220, 100)` in `MainWindow` and `CentralWidget`.

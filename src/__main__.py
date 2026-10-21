@@ -245,7 +245,7 @@ class Worker(QThread):
         self._running = True
         self.is_auto = (layout == "auto")
         self.layout = layout
-        self.active_auto_layout = "abnt2"
+        self.active_auto_layout = detect_system_layout()
         self.is_paused = paused
         self.is_privacy = privacy
 
@@ -255,6 +255,8 @@ class Worker(QThread):
             "us-intl": XkbResolver(layout="us-intl"),
             "us": XkbResolver(layout="us"),
         }
+        if self.active_auto_layout not in self.resolvers:
+            self.resolvers[self.active_auto_layout] = XkbResolver(layout=self.active_auto_layout)
         if layout not in self.resolvers and layout != "auto":
             self.resolvers[layout] = XkbResolver(layout=layout)
         self.device_layout_cache = {}
