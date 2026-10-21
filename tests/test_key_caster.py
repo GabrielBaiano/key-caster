@@ -211,13 +211,35 @@ def test_main_window_switch_layout(qapp):
 def test_classify_keyboard_device(monkeypatch):
     from xkb_resolver import classify_keyboard_device
 
+    device_map = {
+        "/dev/input/event2": "AT Translated Set 2 keyboard",
+        "/dev/input/event21": "ROYUAN Akko keyboard",
+        "/dev/input/event10": "Logitech USB Keyboard",
+        "/dev/input/event11": "Dell KB216 Wired Keyboard",
+        "/dev/input/event12": "Generic USB Keyboard",
+        "/dev/input/event13": "Keychron K2 Pro",
+        "/dev/input/event14": "ThinkPad Extra Buttons",
+    }
+
     monkeypatch.setattr(
         "xkb_resolver.get_device_name",
-        lambda p: "AT Translated Set 2 keyboard" if p.endswith("/event2") else "ROYUAN Akko keyboard",
+        lambda p: device_map.get(p, ""),
     )
 
+    # Built-in laptop / ThinkPad
     assert classify_keyboard_device("/dev/input/event2") == "abnt2"
+    assert classify_keyboard_device("/dev/input/event14") == "abnt2"
+
+    # Explicit ANSI keyboards
     assert classify_keyboard_device("/dev/input/event21") == "us-intl"
+    assert classify_keyboard_device("/dev/input/event13") == "us-intl"
+
+    # Generic USB keyboards should NOT be forced to us-intl; they return 'auto'
+    assert classify_keyboard_device("/dev/input/event10") == "auto"
+    assert classify_keyboard_device("/dev/input/event11") == "auto"
+    assert classify_keyboard_device("/dev/input/event12") == "auto"
+    assert classify_keyboard_device("/dev/input/unknown") == "auto"
+    assert classify_keyboard_device(None) == "auto"
 
 
 def test_xkb_resolver_dead_keys_us_intl():
@@ -262,24 +284,36 @@ def test_xkb_resolver_dead_keys_abnt2():
 def test_worker_per_device_resolution(monkeypatch):
     from types import SimpleNamespace
 
+    device_map = {
+        "/dev/input/event2": "AT Translated Set 2 keyboard",
+        "/dev/input/event21": "ROYUAN Akko keyboard",
+        "/dev/input/event10": "Logitech USB Keyboard",
+    }
+
     monkeypatch.setattr(
         "xkb_resolver.get_device_name",
-        lambda p: "AT Translated Set 2 keyboard" if p.endswith("/event2") else "ROYUAN Akko keyboard",
+        lambda p: device_map.get(p, ""),
     )
 
     worker = Worker(layout="auto")
+    worker.active_auto_layout = "abnt2"
 
     event_laptop = SimpleNamespace(device="/dev/input/event2", scan_code=40)
     event_akko = SimpleNamespace(device="/dev/input/event21", scan_code=40)
+    event_generic = SimpleNamespace(device="/dev/input/event10", scan_code=40)
 
     res_laptop = worker.get_resolver(event_laptop)
     res_akko = worker.get_resolver(event_akko)
+    res_generic = worker.get_resolver(event_generic)
 
     # Scancode 40 on laptop (ABNT2 ThinkPad) produces ~
     assert res_laptop.resolve(40, is_shift=False) == {"type": "char", "name": "~"}
 
     # Scancode 40 on Akko (US-Intl ANSI) produces '
     assert res_akko.resolve(40, is_shift=False) == {"type": "char", "name": "'"}
+
+    # Scancode 40 on generic USB keyboard falls back to active_auto_layout (ABNT2 -> ~)
+    assert res_generic.resolve(40, is_shift=False) == {"type": "char", "name": "~"}
 
 
 def test_key_displayer_paused(qapp):
