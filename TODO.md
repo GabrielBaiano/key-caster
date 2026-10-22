@@ -18,10 +18,10 @@ Tracking improvements, community feedback, and architectural tasks for Key-caste
   - [x] Fall back to system's active RMLVO layout (`get_system_rmlvo`) when device hardware name is ambiguous.
   - [x] Add unit tests verifying external ABNT2 keyboards are not falsely resolved as `us-intl`.
 
-- [ ] **Dynamic Card Width & Text Truncation** ([#7](https://github.com/GabrielBaiano/key-caster/issues/7))
-  - [ ] Replace `setFixedSize(220, 100)` with `setMinimumSize(220, 100)` in `MainWindow` and `CentralWidget`.
-  - [ ] Recalculate card width dynamically based on `fontMetrics().horizontalAdvance(text)`.
-  - [ ] Add max width boundary (e.g. 480px) to prevent screen overflow on extreme inputs.
+- [x] **Dynamic Card Width & Text Truncation** ([#7](https://github.com/GabrielBaiano/key-caster/issues/7))
+  - [x] Replace `setFixedSize(220, 100)` with `setMinimumWidth(220)` in `MainWindow` and `CentralWidget`.
+  - [x] Recalculate card width dynamically based on `fontMetrics().horizontalAdvance(text)`.
+  - [x] Clamp width between 220px and 600px with screen anchoring compensation.
 
 ---
 

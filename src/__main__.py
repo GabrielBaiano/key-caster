@@ -482,7 +482,12 @@ class MainWindow(QMainWindow):
         self.central_widget = CentralWidget(self, self.key_dis, self.mod_dis)
         self.setCentralWidget(self.central_widget)
 
-        self.setFixedSize(220, 100)
+        self.current_position = "bottom-right"
+        self.is_custom_pos = False
+
+        self.setFixedHeight(100)
+        self.setMinimumWidth(220)
+        self.resize(220, 100)
 
         # Inactivity auto-clear / auto-hide timer
         self.inactivity_timer = QTimer(self)
@@ -518,13 +523,16 @@ class MainWindow(QMainWindow):
             self.layout = layout
 
     def location_on_the_screen(self, position: str = "bottom-right", margin_x: int = 40, margin_y: int = 60):
+        self.current_position = position.lower()
+        self.is_custom_pos = False
+
         screen = QApplication.primaryScreen()
         if screen:
             ag = screen.availableGeometry()
         else:
             ag = QDesktopWidget().availableGeometry()
 
-        pos = position.lower()
+        pos = self.current_position
         if pos == "bottom-left":
             x = ag.x() + margin_x
             y = ag.y() + ag.height() - self.height() - margin_y
@@ -549,11 +557,45 @@ class MainWindow(QMainWindow):
 
         self.move(x, y)
 
+    def update_card_width(self):
+        content_w = self.key_dis.content_width() if hasattr(self.key_dis, "content_width") else 0
+        if content_w > 0:
+            target_w = max(220, min(600, content_w + 48))
+        else:
+            target_w = 220
+
+        old_w = self.width()
+        if target_w != old_w:
+            screen = QApplication.primaryScreen()
+            if screen:
+                ag = screen.availableGeometry()
+            else:
+                ag = QDesktopWidget().availableGeometry()
+
+            curr_x = self.x()
+            curr_y = self.y()
+
+            if self.current_position in ("bottom-right", "top-right") or (
+                self.is_custom_pos and curr_x > ag.x() + ag.width() // 2
+            ):
+                delta = target_w - old_w
+                new_x = max(ag.x(), curr_x - delta)
+                self.move(new_x, curr_y)
+            elif self.current_position in ("bottom-center", "top-center", "center"):
+                delta = target_w - old_w
+                new_x = max(ag.x(), curr_x - (delta // 2))
+                self.move(new_x, curr_y)
+
+            self.setFixedWidth(target_w)
+            if hasattr(self, "central_widget") and self.central_widget:
+                self.central_widget.setFixedWidth(target_w)
+
     @pyqtSlot(str)
     def on_key_pressed(self, key_label: str):
         if self.is_paused:
             return
         self.key_dis.add_key(key_label)
+        self.update_card_width()
         if not self.isVisible():
             self.show()
         if self.timeout > 0:
@@ -584,6 +626,7 @@ class MainWindow(QMainWindow):
         self.is_paused = is_paused
         self.clear_display()
         self.key_dis.set_paused(is_paused)
+        self.update_card_width()
 
     @pyqtSlot(bool)
     def on_privacy_toggled(self, is_privacy: bool):
@@ -605,6 +648,7 @@ class MainWindow(QMainWindow):
     def on_inactivity_timeout(self):
         self.key_dis.clear_keys()
         self.mod_dis.reset_all()
+        self.update_card_width()
 
     @pyqtSlot(str)
     def on_worker_error(self, message: str):
@@ -613,6 +657,7 @@ class MainWindow(QMainWindow):
     def clear_display(self):
         self.key_dis.clear_keys()
         self.mod_dis.reset_all()
+        self.update_card_width()
 
     def toggle_auto_hide(self):
         if self.timeout > 0:
@@ -645,6 +690,7 @@ class MainWindow(QMainWindow):
 
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.LeftButton:
+            self.is_custom_pos = True
             self.move(event.globalPos() - self._drag_pos)
             event.accept()
 
