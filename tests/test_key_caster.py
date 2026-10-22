@@ -394,3 +394,41 @@ def test_worker_privacy_character_masking():
     label_action = "•" if (worker.is_privacy and resolved_action["type"] == "char") else resolved_action["name"]
     assert label_action == "↩"
 
+
+def test_dynamic_card_width_expansion_and_reset(qapp):
+    win = MainWindow(start_worker=False)
+    assert win.width() == 220
+    assert win.central_widget.width() == 220
+
+    # Normal short key keeps minimum width
+    win.on_key_pressed("A")
+    assert win.width() == 220
+
+    # Long shortcut expands card width dynamically
+    win.on_key_pressed("Ctrl+Alt+Shift+Delete")
+    assert win.width() > 220
+    assert win.central_widget.width() == win.width()
+
+    # Clearing keys resets card width to minimum 220
+    win.clear_display()
+    assert win.width() == 220
+    assert win.central_widget.width() == 220
+
+
+def test_dynamic_card_width_right_edge_anchoring(qapp):
+    win = MainWindow(start_worker=False)
+    win.location_on_the_screen("bottom-right", margin_x=40, margin_y=60)
+    initial_x = win.x()
+    initial_right = initial_x + win.width()
+
+    # Long text expands leftwards to preserve right margin
+    win.on_key_pressed("Ctrl+Alt+Shift+Delete")
+    assert win.width() > 220
+    assert win.x() + win.width() == initial_right
+    assert win.x() < initial_x
+
+    # Reset restores initial x and width
+    win.clear_display()
+    assert win.width() == 220
+    assert win.x() == initial_x
+

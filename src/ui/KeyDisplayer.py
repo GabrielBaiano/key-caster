@@ -11,9 +11,23 @@ class KeyDisplayer(QLabel):
         self._keys = deque(maxlen=max_keys)
         self._is_paused = False
         self.setAlignment(Qt.AlignCenter)
+
+        f = self.font()
+        f.setPixelSize(self.font_size)
+        self.setFont(f)
+
         self._apply_normal_style()
 
+    def content_width(self) -> int:
+        text = self.text()
+        if not text:
+            return 0
+        return self.fontMetrics().horizontalAdvance(text)
+
     def _apply_normal_style(self):
+        f = self.font()
+        f.setPixelSize(self.font_size)
+        self.setFont(f)
         self.setStyleSheet(
             f"color: #ffffff; font-size: {self.font_size}px; font-weight: normal; "
             "font-family: -apple-system, BlinkMacSystemFont, 'DejaVu Sans', 'FiraCode Nerd Font', 'Segoe UI', Roboto, sans-serif; "

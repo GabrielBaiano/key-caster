@@ -5,7 +5,8 @@ class CentralWidget(QFrame):
     def __init__(self, parent, key_dis, mod_dis):
         super().__init__(parent)
         self.setObjectName("Card")
-        self.setFixedSize(220, 100)
+        self.setFixedHeight(100)
+        self.setMinimumWidth(220)
         self.setStyleSheet("""
             QFrame#Card {
                 background-color: #000000;
