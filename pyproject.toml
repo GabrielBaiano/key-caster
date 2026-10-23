@@ -43,3 +43,8 @@ key-caster = "src.__main__:main"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["src*"]
+
+[tool.setuptools.data-files]
+"share/applications" = ["assets/key-caster.desktop"]
+"share/icons/hicolor/scalable/apps" = ["assets/key-caster.svg"]
+"share/icons/hicolor/256x256/apps" = ["assets/key-caster.png"]

@@ -432,3 +432,47 @@ def test_dynamic_card_width_right_edge_anchoring(qapp):
     assert win.width() == 220
     assert win.x() == initial_x
 
+
+def test_packaging_desktop_entry():
+    desktop_path = os.path.join(ROOT_DIR, "assets", "key-caster.desktop")
+    assert os.path.isfile(desktop_path)
+
+    with open(desktop_path, "r", encoding="utf-8") as f:
+        content = f.read()
+
+    assert "[Desktop Entry]" in content
+    assert "Type=Application" in content
+    assert "Name=Key Caster" in content
+    assert "Exec=key-caster" in content
+    assert "Icon=key-caster" in content
+    assert "Categories=Utility;Accessibility;" in content
+
+
+def test_packaging_icon_assets():
+    svg_path = os.path.join(ROOT_DIR, "assets", "key-caster.svg")
+    png_path = os.path.join(ROOT_DIR, "assets", "key-caster.png")
+
+    assert os.path.isfile(svg_path)
+    assert os.path.isfile(png_path)
+
+    with open(svg_path, "r", encoding="utf-8") as f:
+        svg_content = f.read()
+    assert "<svg" in svg_content
+    assert "</svg>" in svg_content
+
+    assert os.path.getsize(png_path) > 0
+
+
+def test_packaging_arch_pkgbuild():
+    pkgbuild_path = os.path.join(ROOT_DIR, "packaging", "arch", "PKGBUILD")
+    assert os.path.isfile(pkgbuild_path)
+
+    with open(pkgbuild_path, "r", encoding="utf-8") as f:
+        pkgbuild_content = f.read()
+
+    assert "_pkgname=key-caster" in pkgbuild_content
+    assert "python-pyqt5" in pkgbuild_content
+    assert "python-keyboard" in pkgbuild_content
+    assert "build()" in pkgbuild_content
+    assert "package()" in pkgbuild_content
+

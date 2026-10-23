@@ -26,6 +26,14 @@ Log out and log back in (or restart) for the group membership to take effect.
 pipx install git+https://github.com/GabrielBaiano/key-caster.git
 ```
 
+### Arch Linux (PKGBUILD)
+
+```bash
+git clone https://github.com/GabrielBaiano/key-caster.git
+cd key-caster/packaging/arch
+makepkg -si
+```
+
 ### From source
 
 ```bash
@@ -40,6 +48,17 @@ To run directly from source without installing:
 
 ```bash
 python3 key_caster.py
+```
+
+### Desktop Launcher Integration
+
+To add Key-caster to your application launcher (Rofi, Wofi, GNOME Dash, KDE Kickoff):
+
+```bash
+mkdir -p ~/.local/share/applications ~/.local/share/icons/hicolor/scalable/apps ~/.local/share/icons/hicolor/256x256/apps
+cp assets/key-caster.desktop ~/.local/share/applications/
+cp assets/key-caster.svg ~/.local/share/icons/hicolor/scalable/apps/
+cp assets/key-caster.png ~/.local/share/icons/hicolor/256x256/apps/
 ```
 
 ## Usage
