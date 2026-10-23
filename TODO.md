@@ -29,10 +29,11 @@ Tracking improvements, community feedback, and architectural tasks for Key-caste
 
 - [x] ~~**Spacebar Retention & Configurable Clearing**~~ ([#5](https://github.com/GabrielBaiano/key-caster/issues/5)) — *Closed as by-design (deliberate token flushing delimiter)*
 
-- [ ] **Configuration Persistence** ([#6](https://github.com/GabrielBaiano/key-caster/issues/6))
-  - [ ] Support loading and saving preferences in `~/.config/key-caster/config.toml` (or via `QSettings`).
-  - [ ] Persist window coordinates `(x, y)` on drag release.
-  - [ ] Persist layout override, timeout duration, font size, and opacity.
+- [x] **Configuration Persistence** ([#6](https://github.com/GabrielBaiano/key-caster/issues/6))
+  - [x] Support loading and saving preferences in `~/.config/key-caster/config.toml`.
+  - [x] Persist window coordinates `(x, y)` on drag release and screen presets.
+  - [x] Persist layout override, timeout duration, opacity, font size, and max keys.
+  - [x] Safe off-screen coordinate recovery for multi-monitor disconnects.
 
 - [ ] **Native Wayland Protocol Support** ([#2](https://github.com/GabrielBaiano/key-caster/issues/2))
   - [ ] Investigate `wlr-layer-shell` integration to avoid hardcoded `QT_QPA_PLATFORM=xcb` Xwayland requirement.

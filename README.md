@@ -72,6 +72,8 @@ keycaster
 ```text
 keycaster [options]
 
+  -c, --config PATH           Path to configuration file (default: ~/.config/key-caster/config.toml)
+  --no-config                 Disable loading and saving user configuration file
   -t, --timeout TIMEOUT       Inactivity timeout in seconds before clearing (default: 2.0, 0 to disable)
   -m, --max-keys MAX_KEYS     Maximum keys displayed simultaneously (default: 5)
   -s, --font-size SIZE        Font size in pixels (default: 32)
@@ -82,13 +84,24 @@ keycaster [options]
   --privacy                   Start application with privacy masking enabled (display bullets)
 ```
 
+### Configuration Persistence
+
+Key-caster automatically remembers your settings across restarts in `~/.config/key-caster/config.toml`:
+
+- **Window Position**: Dragging the widget to any screen or selecting a preset preserves your preferred coordinates. If a second monitor is disconnected, Key-caster safely falls back to a visible desktop area.
+- **Layout & Timeout**: Saved whenever toggled from the right-click menu.
+- **Opacity**: Adjustable from the right-click menu (100%, 90%, 80%, 70%, 50%) or CLI and persisted automatically.
+
+Explicit CLI flags always override the saved configuration.
+
 ## Features
 
 - **Non-root execution**: Runs cleanly as a regular user via the Linux `input` group.
+- **Configuration Persistence**: Automatically saves and restores window coordinates, screen position, layout override, and opacity in `~/.config/key-caster/config.toml`.
 - **Privacy & Sensitive Input Protection**: Toggle global capture pause (`Super+Shift+P` / `Alt+Shift+P`) or privacy masking mode (`Super+Shift+S` / `Alt+Shift+S`) to protect passwords and credentials during screen recordings and livestreams.
 - **Per-Device Layout Routing**: In `auto` mode, keystrokes are automatically mapped based on the physical hardware device. An internal laptop keyboard (ABNT2 / ThinkPad) and an external USB keyboard (US-Intl / ANSI) can be used simultaneously with accurate keycaps and dead keys.
 - **Mac Typography**: Renders modifier keys with clean symbols (`⇧`, `⌃`, `⌥`, `⌘`) and action keys (`⌫`, `⌦`, `↩`, `⇥`, `⎋`, `⎙`).
-- **Context Menu**: Right-click the overlay to clear keys, toggle auto-hide, pause/resume capturing, toggle privacy masking, change screen position presets, or override keyboard layouts.
+- **Context Menu**: Right-click the overlay to clear keys, toggle auto-hide, pause/resume capturing, toggle privacy masking, change screen position presets, adjust opacity, or override keyboard layouts.
 - **Draggable**: Click and drag with the left mouse button to place the overlay anywhere on screen.
 - **Wayland / COSMIC / X11**: Configured to float cleanly above windows without tiling interference or stealing input focus.
 

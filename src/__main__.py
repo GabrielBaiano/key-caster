@@ -5,6 +5,7 @@ import os
 import signal
 import sys
 from collections import deque
+from typing import Optional
 
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtCore import QPoint, Qt, QThread, QTimer, pyqtSignal, pyqtSlot
@@ -23,6 +24,25 @@ try:
     from xkb_resolver import XkbResolver, classify_keyboard_device
 except ImportError:
     from src.xkb_resolver import XkbResolver, classify_keyboard_device
+
+try:
+    from config import (
+        DEFAULT_CONFIG,
+        VALID_LAYOUTS,
+        VALID_POSITIONS,
+        get_default_config_path,
+        load_config,
+        save_config,
+    )
+except ImportError:
+    from src.config import (
+        DEFAULT_CONFIG,
+        VALID_LAYOUTS,
+        VALID_POSITIONS,
+        get_default_config_path,
+        load_config,
+        save_config,
+    )
 
 
 def patch_keyboard_linux():
@@ -451,21 +471,29 @@ class MainWindow(QMainWindow):
         start_worker: bool = True,
         paused: bool = False,
         privacy: bool = False,
+        config_path: str = None,
+        save_state_enabled: bool = False,
     ):
         super().__init__()
 
         self.timeout = timeout
         self.max_keys = max_keys
+        self.font_size = font_size
+        self.opacity_val = max(0.1, min(1.0, float(opacity)))
         self.layout = layout
         self.is_paused = paused
         self.is_privacy = privacy
+        self.config_path = config_path
+        self.save_state_enabled = save_state_enabled
         self._drag_pos = QPoint()
+        self._setting_preset = False
+        self._adjusting_width = False
 
         self.setWindowTitle("Key-caster")
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.setAttribute(Qt.WA_X11DoNotAcceptFocus, True)
-        self.setWindowOpacity(opacity)
+        self.setWindowOpacity(self.opacity_val)
 
         self.setWindowFlags(
             Qt.WindowStaysOnTopHint
@@ -522,40 +550,100 @@ class MainWindow(QMainWindow):
         if hasattr(self, "worker") and not self.worker.is_auto:
             self.layout = layout
 
+    def set_opacity(self, opacity: float):
+        self.opacity_val = max(0.1, min(1.0, float(opacity)))
+        self.setWindowOpacity(self.opacity_val)
+        self.save_state()
+
+    def save_state(self):
+        if not self.save_state_enabled:
+            return
+
+        current_layout = "auto" if (hasattr(self, "worker") and self.worker.is_auto) else self.layout
+        pos = "custom" if self.is_custom_pos else self.current_position
+        data = {
+            "position": pos,
+            "custom_x": self.x() if self.is_custom_pos else None,
+            "custom_y": self.y() if self.is_custom_pos else None,
+            "layout": current_layout,
+            "timeout": self.timeout,
+            "opacity": self.opacity_val,
+            "font_size": self.font_size,
+            "max_keys": self.max_keys,
+            "privacy": self.is_privacy,
+            "paused": self.is_paused,
+        }
+        save_config(data, self.config_path)
+
+    def restore_position(
+        self,
+        position: str = "bottom-right",
+        custom_x: Optional[int] = None,
+        custom_y: Optional[int] = None,
+    ):
+        self._setting_preset = True
+        try:
+            if position == "custom" and custom_x is not None and custom_y is not None:
+                # Check if coordinates intersect with or are contained by any connected screen
+                valid = False
+                screens = QApplication.screens()
+                for screen in screens:
+                    geo = screen.geometry()
+                    target_rect = QtCore.QRect(custom_x, custom_y, self.width(), self.height())
+                    if geo.intersects(target_rect) or geo.contains(QPoint(custom_x, custom_y)):
+                        valid = True
+                        break
+
+                if valid:
+                    self.is_custom_pos = True
+                    self.current_position = "custom"
+                    self.move(custom_x, custom_y)
+                    return
+
+            preset = position if position in VALID_POSITIONS and position != "custom" else "bottom-right"
+            self.location_on_the_screen(preset)
+        finally:
+            self._setting_preset = False
+
     def location_on_the_screen(self, position: str = "bottom-right", margin_x: int = 40, margin_y: int = 60):
-        self.current_position = position.lower()
-        self.is_custom_pos = False
+        self._setting_preset = True
+        try:
+            self.current_position = position.lower()
+            self.is_custom_pos = False
 
-        screen = QApplication.primaryScreen()
-        if screen:
-            ag = screen.availableGeometry()
-        else:
-            ag = QDesktopWidget().availableGeometry()
+            screen = QApplication.primaryScreen()
+            if screen:
+                ag = screen.availableGeometry()
+            else:
+                ag = QDesktopWidget().availableGeometry()
 
-        pos = self.current_position
-        if pos == "bottom-left":
-            x = ag.x() + margin_x
-            y = ag.y() + ag.height() - self.height() - margin_y
-        elif pos == "bottom-center":
-            x = ag.x() + (ag.width() - self.width()) // 2
-            y = ag.y() + ag.height() - self.height() - margin_y
-        elif pos == "top-right":
-            x = ag.x() + ag.width() - self.width() - margin_x
-            y = ag.y() + margin_y
-        elif pos == "top-left":
-            x = ag.x() + margin_x
-            y = ag.y() + margin_y
-        elif pos == "top-center":
-            x = ag.x() + (ag.width() - self.width()) // 2
-            y = ag.y() + margin_y
-        elif pos == "center":
-            x = ag.x() + (ag.width() - self.width()) // 2
-            y = ag.y() + (ag.height() - self.height()) // 2
-        else:  # bottom-right
-            x = ag.x() + ag.width() - self.width() - margin_x
-            y = ag.y() + ag.height() - self.height() - margin_y
+            pos = self.current_position
+            if pos == "bottom-left":
+                x = ag.x() + margin_x
+                y = ag.y() + ag.height() - self.height() - margin_y
+            elif pos == "bottom-center":
+                x = ag.x() + (ag.width() - self.width()) // 2
+                y = ag.y() + ag.height() - self.height() - margin_y
+            elif pos == "top-right":
+                x = ag.x() + ag.width() - self.width() - margin_x
+                y = ag.y() + margin_y
+            elif pos == "top-left":
+                x = ag.x() + margin_x
+                y = ag.y() + margin_y
+            elif pos == "top-center":
+                x = ag.x() + (ag.width() - self.width()) // 2
+                y = ag.y() + margin_y
+            elif pos == "center":
+                x = ag.x() + (ag.width() - self.width()) // 2
+                y = ag.y() + (ag.height() - self.height()) // 2
+            else:  # bottom-right
+                x = ag.x() + ag.width() - self.width() - margin_x
+                y = ag.y() + ag.height() - self.height() - margin_y
 
-        self.move(x, y)
+            self.move(x, y)
+            self.save_state()
+        finally:
+            self._setting_preset = False
 
     def update_card_width(self):
         content_w = self.key_dis.content_width() if hasattr(self.key_dis, "content_width") else 0
@@ -575,16 +663,20 @@ class MainWindow(QMainWindow):
             curr_x = self.x()
             curr_y = self.y()
 
-            if self.current_position in ("bottom-right", "top-right") or (
-                self.is_custom_pos and curr_x > ag.x() + ag.width() // 2
-            ):
-                delta = target_w - old_w
-                new_x = max(ag.x(), curr_x - delta)
-                self.move(new_x, curr_y)
-            elif self.current_position in ("bottom-center", "top-center", "center"):
-                delta = target_w - old_w
-                new_x = max(ag.x(), curr_x - (delta // 2))
-                self.move(new_x, curr_y)
+            self._adjusting_width = True
+            try:
+                if self.current_position in ("bottom-right", "top-right") or (
+                    self.is_custom_pos and curr_x > ag.x() + ag.width() // 2
+                ):
+                    delta = target_w - old_w
+                    new_x = max(ag.x(), curr_x - delta)
+                    self.move(new_x, curr_y)
+                elif self.current_position in ("bottom-center", "top-center", "center"):
+                    delta = target_w - old_w
+                    new_x = max(ag.x(), curr_x - (delta // 2))
+                    self.move(new_x, curr_y)
+            finally:
+                self._adjusting_width = False
 
             self.setFixedWidth(target_w)
             if hasattr(self, "central_widget") and self.central_widget:
@@ -665,11 +757,13 @@ class MainWindow(QMainWindow):
             self.inactivity_timer.stop()
         else:
             self.timeout = 2.0
+        self.save_state()
 
     def set_keyboard_layout(self, layout: str):
         self.layout = layout
         if hasattr(self, "worker") and self.worker:
             self.worker.set_layout(layout)
+        self.save_state()
 
     @pyqtSlot()
     def on_check_layout_change(self):
@@ -691,8 +785,20 @@ class MainWindow(QMainWindow):
     def mouseMoveEvent(self, event):
         if event.buttons() == Qt.LeftButton:
             self.is_custom_pos = True
+            self.current_position = "custom"
             self.move(event.globalPos() - self._drag_pos)
             event.accept()
+
+    def mouseReleaseEvent(self, event):
+        if event.button() == Qt.LeftButton and self.is_custom_pos:
+            self.save_state()
+            event.accept()
+
+    def moveEvent(self, event):
+        super().moveEvent(event)
+        if not getattr(self, "_setting_preset", False) and not getattr(self, "_adjusting_width", False):
+            self.is_custom_pos = True
+            self.current_position = "custom"
 
     # Context menu for quick actions
     def contextMenuEvent(self, event):
@@ -752,6 +858,28 @@ class MainWindow(QMainWindow):
         p_tl = pos_menu.addAction("Top Left")
         p_c = pos_menu.addAction("Center")
 
+        opacity_menu = menu.addMenu("Opacity")
+        opacity_menu.setStyleSheet(menu.styleSheet())
+        o_group = QtWidgets.QActionGroup(self)
+        o_100 = opacity_menu.addAction("100%")
+        o_90 = opacity_menu.addAction("90%")
+        o_80 = opacity_menu.addAction("80%")
+        o_70 = opacity_menu.addAction("70%")
+        o_50 = opacity_menu.addAction("50%")
+
+        op_actions = [
+            (o_100, 1.0),
+            (o_90, 0.90),
+            (o_80, 0.80),
+            (o_70, 0.70),
+            (o_50, 0.50),
+        ]
+        closest_act = min(op_actions, key=lambda pair: abs(pair[1] - self.opacity_val))[0]
+        for act, _ in op_actions:
+            act.setCheckable(True)
+            o_group.addAction(act)
+        closest_act.setChecked(True)
+
         menu.addSeparator()
         exit_act = menu.addAction("Exit Key-caster")
 
@@ -788,8 +916,14 @@ class MainWindow(QMainWindow):
             self.location_on_the_screen("top-left")
         elif action == p_c:
             self.location_on_the_screen("center")
+        else:
+            for act, val in op_actions:
+                if action == act:
+                    self.set_opacity(val)
+                    break
 
     def closeEvent(self, event):
+        self.save_state()
         if hasattr(self, "worker") and self.worker.isRunning():
             self.worker.stop()
             self.worker.wait(500)
@@ -804,38 +938,51 @@ def main():
         description="Key-caster: Lightweight on-screen keystroke displayer for Linux."
     )
     parser.add_argument(
+        "-c",
+        "--config",
+        type=str,
+        default=None,
+        help="Path to configuration file (default: ~/.config/key-caster/config.toml)",
+    )
+    parser.add_argument(
+        "--no-config",
+        action="store_true",
+        default=False,
+        help="Disable loading and saving user configuration file",
+    )
+    parser.add_argument(
         "-t",
         "--timeout",
         type=float,
-        default=2.0,
+        default=None,
         help="Inactivity timeout in seconds before clearing keystrokes (default: 2.0, 0 to disable)",
     )
     parser.add_argument(
         "-m",
         "--max-keys",
         type=int,
-        default=5,
+        default=None,
         help="Maximum number of simultaneous keys displayed (default: 5)",
     )
     parser.add_argument(
         "-s",
         "--font-size",
         type=int,
-        default=32,
+        default=None,
         help="Font size for keys in pixels (default: 32)",
     )
     parser.add_argument(
         "-o",
         "--opacity",
         type=float,
-        default=0.92,
+        default=None,
         help="Overlay opacity between 0.1 and 1.0 (default: 0.92)",
     )
     parser.add_argument(
         "-p",
         "--position",
         type=str,
-        default="bottom-right",
+        default=None,
         choices=[
             "bottom-right",
             "bottom-left",
@@ -851,24 +998,43 @@ def main():
         "-l",
         "--layout",
         type=str,
-        default="auto",
+        default=None,
         choices=["auto", "abnt2", "br", "us-intl", "us"],
         help="Keyboard layout for shift mappings (default: auto)",
     )
     parser.add_argument(
         "--paused",
         action="store_true",
-        default=False,
+        default=None,
         help="Start application with key capturing paused",
     )
     parser.add_argument(
         "--privacy",
         action="store_true",
-        default=False,
+        default=None,
         help="Start application with privacy masking enabled (display bullets)",
     )
 
     args = parser.parse_args()
+
+    if args.no_config:
+        cfg = dict(DEFAULT_CONFIG)
+        save_state_enabled = False
+    else:
+        cfg = load_config(args.config)
+        save_state_enabled = True
+
+    timeout = args.timeout if args.timeout is not None else cfg.get("timeout", 2.0)
+    max_keys = args.max_keys if args.max_keys is not None else cfg.get("max_keys", 5)
+    font_size = args.font_size if args.font_size is not None else cfg.get("font_size", 32)
+    opacity = args.opacity if args.opacity is not None else cfg.get("opacity", 0.92)
+    layout = args.layout if args.layout is not None else cfg.get("layout", "auto")
+    paused = args.paused if args.paused is not None else cfg.get("paused", False)
+    privacy = args.privacy if args.privacy is not None else cfg.get("privacy", False)
+
+    position = args.position if args.position is not None else cfg.get("position", "bottom-right")
+    custom_x = None if args.position is not None else cfg.get("custom_x")
+    custom_y = None if args.position is not None else cfg.get("custom_y")
 
     app = QApplication(sys.argv)
 
@@ -879,15 +1045,17 @@ def main():
     sigint_timer.timeout.connect(lambda: None)
 
     window = MainWindow(
-        timeout=args.timeout,
-        max_keys=args.max_keys,
-        font_size=args.font_size,
-        opacity=args.opacity,
-        layout=args.layout,
-        paused=args.paused,
-        privacy=args.privacy,
+        timeout=timeout,
+        max_keys=max_keys,
+        font_size=font_size,
+        opacity=opacity,
+        layout=layout,
+        paused=paused,
+        privacy=privacy,
+        config_path=args.config,
+        save_state_enabled=save_state_enabled,
     )
-    window.location_on_the_screen(position=args.position)
+    window.restore_position(position=position, custom_x=custom_x, custom_y=custom_y)
     window.show()
 
     sys.exit(app.exec_())
