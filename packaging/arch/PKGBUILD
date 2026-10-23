@@ -1,0 +1,54 @@
+# Maintainer: Gabriel Gama <gabrielbaiano>
+pkgname=key-caster-git
+_pkgname=key-caster
+pkgver=1.0.0.r11.g0b727b7
+pkgrel=1
+pkgdesc="Lightweight on-screen keystroke displayer for Linux (Wayland, COSMIC, and X11)"
+arch=('any')
+url="https://github.com/GabrielBaiano/key-caster"
+license=('GPL-3.0-or-later')
+depends=(
+    'python>=3.8'
+    'python-pyqt5'
+    'python-keyboard'
+    'libxkbcommon'
+)
+makedepends=(
+    'git'
+    'python-build'
+    'python-installer'
+    'python-wheel'
+    'python-setuptools'
+)
+provides=('key-caster' 'keycaster')
+conflicts=('key-caster')
+source=("git+https://github.com/GabrielBaiano/key-caster.git")
+sha256sums=('SKIP')
+
+pkgver() {
+    cd "${srcdir}/${_pkgname}"
+    git describe --long --tags 2>/dev/null | sed 's/^v//;s/\([^-]*-g\)/r\1/;s/-/./g' ||
+    printf "1.0.0.r%s.g%s" "$(git rev-list --count HEAD)" "$(git rev-parse --short=7 HEAD)"
+}
+
+build() {
+    cd "${srcdir}/${_pkgname}"
+    python -m build --wheel --no-isolation
+}
+
+package() {
+    cd "${srcdir}/${_pkgname}"
+    python -m installer --destdir="${pkgdir}" dist/*.whl
+
+    # Desktop entry
+    install -Dm644 assets/key-caster.desktop "${pkgdir}/usr/share/applications/key-caster.desktop"
+
+    # Application icons
+    install -Dm644 assets/key-caster.svg "${pkgdir}/usr/share/icons/hicolor/scalable/apps/key-caster.svg"
+    if [ -f assets/key-caster.png ]; then
+        install -Dm644 assets/key-caster.png "${pkgdir}/usr/share/icons/hicolor/256x256/apps/key-caster.png"
+    fi
+
+    # Documentation & License
+    install -Dm644 README.md "${pkgdir}/usr/share/doc/${_pkgname}/README.md"
+}

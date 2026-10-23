@@ -27,10 +27,7 @@ Tracking improvements, community feedback, and architectural tasks for Key-caste
 
 ## Medium Priority
 
-- [ ] **Spacebar Retention & Configurable Clearing** ([#5](https://github.com/GabrielBaiano/key-caster/issues/5))
-  - [ ] Stop clearing display immediately on `KEY_SPACE`.
-  - [ ] Render whitespace symbol (`␣` or space) in `KeyDisplayer`.
-  - [ ] Add CLI flag `--clear-on-space` (default: `False`).
+- [x] ~~**Spacebar Retention & Configurable Clearing**~~ ([#5](https://github.com/GabrielBaiano/key-caster/issues/5)) — *Closed as by-design (deliberate token flushing delimiter)*
 
 - [ ] **Configuration Persistence** ([#6](https://github.com/GabrielBaiano/key-caster/issues/6))
   - [ ] Support loading and saving preferences in `~/.config/key-caster/config.toml` (or via `QSettings`).
@@ -45,11 +42,11 @@ Tracking improvements, community feedback, and architectural tasks for Key-caste
 
 ## Packaging & Distribution
 
-- [ ] **Desktop Integration & AUR Package** ([#3](https://github.com/GabrielBaiano/key-caster/issues/3))
-  - [ ] Create `assets/key-caster.desktop` specification file.
-  - [ ] Provide 256x256 PNG and scalable SVG app icon.
-  - [ ] Create `PKGBUILD` for Arch Linux (`key-caster-git`).
-  - [ ] Add `install-desktop` sub-command or script for pipx users.
+- [x] **Desktop Integration & AUR Package** ([#3](https://github.com/GabrielBaiano/key-caster/issues/3))
+  - [x] Create `assets/key-caster.desktop` specification file.
+  - [x] Provide 256x256 PNG and scalable SVG app icon.
+  - [x] Create `PKGBUILD` for Arch Linux (`key-caster-git`).
+  - [x] Add desktop launcher integration instructions to README.md.
 
 - [ ] **International Layouts Expansion**
   - [ ] Add fallback tables for German (QWERTZ), French (AZERTY), and Spanish.

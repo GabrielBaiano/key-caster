@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#242429"/>
+      <stop offset="100%" stop-color="#121214"/>
+    </linearGradient>
+    <linearGradient id="keyGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#323238"/>
+      <stop offset="100%" stop-color="#1f1f23"/>
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+  </defs>
+  <!-- Background rounded card -->
+  <rect x="16" y="16" width="224" height="224" rx="48" fill="url(#bgGrad)" stroke="#3f3f46" stroke-width="2"/>
+  
+  <!-- Elevated keycap body -->
+  <rect x="44" y="44" width="168" height="168" rx="28" fill="url(#keyGrad)" stroke="#52525b" stroke-width="2" filter="url(#shadow)"/>
+  
+  <!-- Keycap top edge highlight -->
+  <line x1="68" y1="50" x2="188" y2="50" stroke="#71717a" stroke-width="1.5" stroke-linecap="round"/>
+
+  <!-- Command Symbol (⌘) -->
+  <path d="M 96,80 C 85,80 76,89 76,100 C 76,111 85,120 96,120 L 112,120 L 112,136 L 96,136 C 85,136 76,145 76,156 C 76,167 85,176 96,176 C 107,176 116,167 116,156 L 116,140 L 140,140 L 140,156 C 140,167 149,176 160,176 C 171,176 180,167 180,156 C 180,145 171,136 160,136 L 144,136 L 144,120 L 160,120 C 171,120 180,111 180,100 C 180,89 171,80 160,80 C 149,80 140,89 140,100 L 140,116 L 116,116 L 116,100 C 116,89 107,80 96,80 Z M 96,92 C 100.4,92 104,95.6 104,100 C 104,104.4 100.4,108 96,108 C 91.6,108 88,104.4 88,100 C 88,95.6 91.6,92 96,92 Z M 160,92 C 164.4,92 168,95.6 168,100 C 168,104.4 164.4,108 160,108 C 155.6,108 152,104.4 152,100 C 152,95.6 155.6,92 160,92 Z M 96,148 C 100.4,148 104,151.6 104,156 C 104,160.4 100.4,164 96,164 C 91.6,164 88,160.4 88,156 C 88,151.6 91.6,148 96,148 Z M 160,148 C 164.4,148 168,151.6 168,156 C 168,160.4 164.4,164 160,164 C 155.6,164 152,160.4 152,156 C 152,151.6 155.6,148 160,148 Z" fill="#ffffff" fill-rule="evenodd"/>
+</svg>

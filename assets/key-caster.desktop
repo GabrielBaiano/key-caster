@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Key Caster
+GenericName=Keystroke Displayer
+Comment=Lightweight on-screen keystroke displayer for Linux
+Exec=key-caster
+Icon=key-caster
+Terminal=false
+Type=Application
+Categories=Utility;Accessibility;
+Keywords=keystroke;screenkey;keycastr;overlay;displayer;
+StartupNotify=false
