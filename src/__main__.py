@@ -490,18 +490,29 @@ class MainWindow(QMainWindow):
         self._adjusting_width = False
 
         self.setWindowTitle("Key-caster")
+        self.setObjectName("key-caster")
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.setAttribute(Qt.WA_X11DoNotAcceptFocus, True)
         self.setWindowOpacity(self.opacity_val)
 
-        self.setWindowFlags(
-            Qt.WindowStaysOnTopHint
-            | Qt.FramelessWindowHint
-            | Qt.WindowDoesNotAcceptFocus
-            | Qt.X11BypassWindowManagerHint
-            | Qt.Tool,
-        )
+        # Adapt window flags for native Wayland vs X11/Xwayland
+        qpa = QApplication.platformName() if QApplication.instance() else ""
+        if "wayland" in qpa:
+            self.setWindowFlags(
+                Qt.WindowStaysOnTopHint
+                | Qt.FramelessWindowHint
+                | Qt.WindowDoesNotAcceptFocus
+                | Qt.ToolTip,
+            )
+        else:
+            self.setWindowFlags(
+                Qt.WindowStaysOnTopHint
+                | Qt.FramelessWindowHint
+                | Qt.WindowDoesNotAcceptFocus
+                | Qt.X11BypassWindowManagerHint
+                | Qt.Tool,
+            )
 
         self.setStyleSheet("QMainWindow { background: transparent; border: none; }")
 
@@ -931,11 +942,16 @@ class MainWindow(QMainWindow):
 
 
 def main():
-    if "QT_QPA_PLATFORM" not in os.environ and os.environ.get("DISPLAY"):
-        os.environ["QT_QPA_PLATFORM"] = "xcb"
-
     parser = argparse.ArgumentParser(
         description="Key-caster: Lightweight on-screen keystroke displayer for Linux."
+    )
+    parser.add_argument(
+        "-P",
+        "--platform",
+        type=str,
+        default="auto",
+        choices=["auto", "xcb", "wayland"],
+        help="Qt platform plugin backend (default: auto)",
     )
     parser.add_argument(
         "-c",
@@ -1017,6 +1033,18 @@ def main():
 
     args = parser.parse_args()
 
+    # Route Qt platform plugin dynamically
+    if "QT_QPA_PLATFORM" not in os.environ:
+        if args.platform == "xcb":
+            os.environ["QT_QPA_PLATFORM"] = "xcb"
+        elif args.platform == "wayland":
+            os.environ["QT_QPA_PLATFORM"] = "wayland"
+        else:  # auto
+            if os.environ.get("DISPLAY"):
+                os.environ["QT_QPA_PLATFORM"] = "xcb"
+            elif os.environ.get("WAYLAND_DISPLAY"):
+                os.environ["QT_QPA_PLATFORM"] = "wayland"
+
     if args.no_config:
         cfg = dict(DEFAULT_CONFIG)
         save_state_enabled = False
@@ -1037,6 +1065,9 @@ def main():
     custom_y = None if args.position is not None else cfg.get("custom_y")
 
     app = QApplication(sys.argv)
+    app.setApplicationName("key-caster")
+    app.setOrganizationName("key-caster")
+    app.setDesktopFileName("key-caster")
 
     # Enable clean Ctrl+C handling in Qt event loop
     signal.signal(signal.SIGINT, lambda *_: app.quit())

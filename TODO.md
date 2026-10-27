@@ -35,9 +35,11 @@ Tracking improvements, community feedback, and architectural tasks for Key-caste
   - [x] Persist layout override, timeout duration, opacity, font size, and max keys.
   - [x] Safe off-screen coordinate recovery for multi-monitor disconnects.
 
-- [ ] **Native Wayland Protocol Support** ([#2](https://github.com/GabrielBaiano/key-caster/issues/2))
-  - [ ] Investigate `wlr-layer-shell` integration to avoid hardcoded `QT_QPA_PLATFORM=xcb` Xwayland requirement.
-  - [ ] Support anchoring to screen edges natively in Sway, Hyprland, and River without window-rule workarounds.
+- [x] **Native Wayland & Tiling Support** ([#2](https://github.com/GabrielBaiano/key-caster/issues/2))
+  - [x] Implement dynamic platform detection (`--platform {auto,xcb,wayland}`) falling back to native Wayland when Xwayland is absent.
+  - [x] Register application identity (`app_id="key-caster"`, `WM_CLASS="key-caster"`).
+  - [x] Apply unmanaged popup window flags (`Qt.ToolTip`) under pure Wayland to prevent screen tiling.
+  - [x] Document out-of-the-box floating rules for Hyprland and Sway.
 
 ---
 

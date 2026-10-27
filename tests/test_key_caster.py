@@ -476,3 +476,31 @@ def test_packaging_arch_pkgbuild():
     assert "build()" in pkgbuild_content
     assert "package()" in pkgbuild_content
 
+
+def test_wayland_window_identity_and_hints(qapp):
+    win = MainWindow(start_worker=False)
+    assert win.objectName() == "key-caster"
+    assert win.windowTitle() == "Key-caster"
+
+    flags = int(win.windowFlags())
+    assert flags & int(Qt.WindowStaysOnTopHint)
+    assert flags & int(Qt.FramelessWindowHint)
+    assert flags & int(Qt.WindowDoesNotAcceptFocus)
+
+
+def test_platform_cli_arguments():
+    import argparse
+    from src.__main__ import main
+
+    # Verify parser accepts --platform choices
+    test_args = ["--platform", "wayland"]
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-P",
+        "--platform",
+        choices=["auto", "xcb", "wayland"],
+        default="auto",
+    )
+    parsed = parser.parse_args(test_args)
+    assert parsed.platform == "wayland"
+

@@ -17,11 +17,24 @@ if os.path.exists(venv_python) and sys.prefix != venv_dir:
         os.execv(venv_python, [venv_python] + sys.argv)
 
 # On Linux desktop sessions with tiling or Wayland (e.g. COSMIC, Sway, Hyprland, i3),
-# the X11 platform plugin (xcb) under Xwayland allows exact (x, y) positioning,
-# window manager bypass (override_redirect), and prevents tiling window managers
-# from capturing the overlay into a split tile.
-if "QT_QPA_PLATFORM" not in os.environ and os.environ.get("DISPLAY"):
-    os.environ["QT_QPA_PLATFORM"] = "xcb"
+# select the appropriate Qt platform plugin:
+if "QT_QPA_PLATFORM" not in os.environ:
+    explicit_platform = None
+    for i, arg in enumerate(sys.argv):
+        if arg in ("--platform", "-P") and i + 1 < len(sys.argv):
+            explicit_platform = sys.argv[i + 1]
+            break
+        elif arg.startswith("--platform="):
+            explicit_platform = arg.split("=", 1)[1]
+            break
+
+    if explicit_platform:
+        if explicit_platform != "auto":
+            os.environ["QT_QPA_PLATFORM"] = explicit_platform
+    elif os.environ.get("DISPLAY"):
+        os.environ["QT_QPA_PLATFORM"] = "xcb"
+    elif os.environ.get("WAYLAND_DISPLAY"):
+        os.environ["QT_QPA_PLATFORM"] = "wayland"
 
 # Ensure 'src' is available in Python path
 sys.path.insert(0, os.path.join(script_dir, "src"))

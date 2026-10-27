@@ -72,6 +72,7 @@ keycaster
 ```text
 keycaster [options]
 
+  -P, --platform PLATFORM     Qt platform backend: auto, xcb, wayland (default: auto)
   -c, --config PATH           Path to configuration file (default: ~/.config/key-caster/config.toml)
   --no-config                 Disable loading and saving user configuration file
   -t, --timeout TIMEOUT       Inactivity timeout in seconds before clearing (default: 2.0, 0 to disable)
@@ -94,16 +95,40 @@ Key-caster automatically remembers your settings across restarts in `~/.config/k
 
 Explicit CLI flags always override the saved configuration.
 
+### Wayland & Tiling Window Managers
+
+Key-caster identifies itself with `app_id="key-caster"` and `class="key-caster"`.
+
+#### Hyprland (`hyprland.conf`)
+```ini
+windowrulev2 = float, class:^(key-caster)$
+windowrulev2 = pin, class:^(key-caster)$
+windowrulev2 = noblur, class:^(key-caster)$
+windowrulev2 = noinitialfocus, class:^(key-caster)$
+```
+
+#### Sway / i3 (`config`)
+```ini
+for_window [app_id="key-caster"] floating enable, sticky enable
+for_window [class="^key-caster$"] floating enable, sticky enable
+```
+
+#### Pure Wayland without Xwayland
+If Xwayland is disabled on your system, Key-caster automatically detects pure Wayland and uses native Wayland popups:
+```bash
+keycaster --platform wayland
+```
+
 ## Features
 
 - **Non-root execution**: Runs cleanly as a regular user via the Linux `input` group.
+- **Wayland & X11 Native Support**: Seamless operation under COSMIC, Hyprland, Sway, GNOME, KDE, and X11 with automatic platform detection and zero screen-tiling interference.
 - **Configuration Persistence**: Automatically saves and restores window coordinates, screen position, layout override, and opacity in `~/.config/key-caster/config.toml`.
 - **Privacy & Sensitive Input Protection**: Toggle global capture pause (`Super+Shift+P` / `Alt+Shift+P`) or privacy masking mode (`Super+Shift+S` / `Alt+Shift+S`) to protect passwords and credentials during screen recordings and livestreams.
 - **Per-Device Layout Routing**: In `auto` mode, keystrokes are automatically mapped based on the physical hardware device. An internal laptop keyboard (ABNT2 / ThinkPad) and an external USB keyboard (US-Intl / ANSI) can be used simultaneously with accurate keycaps and dead keys.
 - **Mac Typography**: Renders modifier keys with clean symbols (`⇧`, `⌃`, `⌥`, `⌘`) and action keys (`⌫`, `⌦`, `↩`, `⇥`, `⎋`, `⎙`).
 - **Context Menu**: Right-click the overlay to clear keys, toggle auto-hide, pause/resume capturing, toggle privacy masking, change screen position presets, adjust opacity, or override keyboard layouts.
 - **Draggable**: Click and drag with the left mouse button to place the overlay anywhere on screen.
-- **Wayland / COSMIC / X11**: Configured to float cleanly above windows without tiling interference or stealing input focus.
 
 ## License & Credits
 
