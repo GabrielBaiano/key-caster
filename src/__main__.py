@@ -29,7 +29,8 @@ def make_window_sticky_and_top(win_id: int):
         pass
 
 from PyQt5 import QtCore, QtWidgets
-from PyQt5.QtCore import QPoint, Qt, QThread, QTimer, pyqtSignal, pyqtSlot
+from PyQt5.QtCore import QPoint, QRect, Qt, QThread, QTimer, pyqtSignal, pyqtSlot
+from PyQt5.QtGui import QRegion
 from PyQt5.QtWidgets import QApplication, QDesktopWidget, QMainWindow, QMenu
 
 try:
@@ -623,6 +624,7 @@ class MainWindow(QMainWindow):
                     self.is_custom_pos = True
                     self.current_position = "custom"
                     self.move(custom_x, custom_y)
+                    self.clamp_to_screen()
                     return
 
             preset = position if position in VALID_POSITIONS and position != "custom" else "bottom-right"
@@ -706,6 +708,7 @@ class MainWindow(QMainWindow):
             self.setFixedWidth(target_w)
             if hasattr(self, "central_widget") and self.central_widget:
                 self.central_widget.setFixedWidth(target_w)
+            self.clamp_to_screen()
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -809,27 +812,110 @@ class MainWindow(QMainWindow):
         if hasattr(self, "worker") and self.worker:
             self.worker.refresh_auto_layout()
 
+    def get_desktop_screens(self):
+        """Returns list of connected screens."""
+        if hasattr(QApplication, "screens"):
+            screens = QApplication.screens()
+            if screens:
+                return screens
+        return []
+
+    def get_desktop_region(self):
+        """Returns the union QRegion of all available screen geometries."""
+        region = QRegion()
+        for s in self.get_desktop_screens():
+            region = region.united(QRegion(s.availableGeometry()))
+        if region.isEmpty():
+            desktop = QApplication.desktop()
+            if desktop:
+                region = QRegion(desktop.availableGeometry())
+        return region
+
+    def clamp_coordinates(self, target_x: int, target_y: int, cursor_pos: Optional[QPoint] = None) -> tuple[int, int]:
+        """Clamps (target_x, target_y) so the window stays completely within visible screen boundaries."""
+        w = self.width()
+        h = self.height()
+        region = self.get_desktop_region()
+        if region.isEmpty():
+            return target_x, target_y
+
+        target_rect = QRect(target_x, target_y, w, h)
+        if QRegion(target_rect).subtracted(region).isEmpty():
+            return target_x, target_y
+
+        screens = self.get_desktop_screens()
+        chosen_screen = None
+        if cursor_pos:
+            for s in screens:
+                if s.availableGeometry().contains(cursor_pos):
+                    chosen_screen = s
+                    break
+        if not chosen_screen:
+            center = cursor_pos if cursor_pos else QPoint(target_x + w // 2, target_y + h // 2)
+            if screens:
+                chosen_screen = min(
+                    screens,
+                    key=lambda s: (s.availableGeometry().center().x() - center.x()) ** 2
+                    + (s.availableGeometry().center().y() - center.y()) ** 2,
+                )
+            else:
+                chosen_screen = QApplication.primaryScreen()
+
+        if chosen_screen:
+            ag = chosen_screen.availableGeometry()
+        else:
+            desktop = QApplication.desktop()
+            ag = desktop.availableGeometry() if desktop else QRect(0, 0, 1920, 1080)
+
+        max_x = max(ag.left(), ag.right() - w + 1)
+        min_x = ag.left()
+        cx = max(min_x, min(target_x, max_x))
+
+        max_y = max(ag.top(), ag.bottom() - h + 1)
+        min_y = ag.top()
+        cy = max(min_y, min(target_y, max_y))
+
+        # Check if clamping only one axis keeps the window inside the multi-monitor desktop
+        if QRegion(QRect(target_x, cy, w, h)).subtracted(region).isEmpty():
+            return target_x, cy
+        if QRegion(QRect(cx, target_y, w, h)).subtracted(region).isEmpty():
+            return cx, target_y
+
+        return cx, cy
+
+    def clamp_to_screen(self):
+        """Ensures the current window position is fully within visible screen bounds."""
+        cx, cy = self.clamp_coordinates(self.x(), self.y())
+        if cx != self.x() or cy != self.y():
+            self.move(cx, cy)
+
     # Mouse drag-and-drop to position the overlay anywhere
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:
-            # Under Wayland (COSMIC), native compositor dragging via startSystemMove is required
-            handle = self.windowHandle()
-            if handle and hasattr(handle, "startSystemMove") and handle.startSystemMove():
-                event.accept()
-                return
+            qpa = QApplication.platformName() if QApplication.instance() else ""
+            if qpa == "wayland":
+                handle = self.windowHandle()
+                if handle and hasattr(handle, "startSystemMove") and handle.startSystemMove():
+                    event.accept()
+                    return
 
             self._drag_pos = event.globalPos() - self.frameGeometry().topLeft()
             event.accept()
 
     def mouseMoveEvent(self, event):
-        if event.buttons() == Qt.LeftButton:
+        if event.buttons() == Qt.LeftButton and hasattr(self, "_drag_pos"):
             self.is_custom_pos = True
             self.current_position = "custom"
-            self.move(event.globalPos() - self._drag_pos)
+            target_pos = event.globalPos() - self._drag_pos
+            clamped_x, clamped_y = self.clamp_coordinates(
+                target_pos.x(), target_pos.y(), cursor_pos=event.globalPos()
+            )
+            self.move(clamped_x, clamped_y)
             event.accept()
 
     def mouseReleaseEvent(self, event):
         if event.button() == Qt.LeftButton and self.is_custom_pos:
+            self.clamp_to_screen()
             self.save_state()
             event.accept()
 

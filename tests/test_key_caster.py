@@ -2,7 +2,8 @@ import os
 import sys
 import pytest
 
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import QPoint, Qt
+from PyQt5.QtGui import QMouseEvent
 from PyQt5.QtWidgets import QApplication
 
 # Ensure project root and src are in python path
@@ -503,4 +504,89 @@ def test_platform_cli_arguments():
     )
     parsed = parser.parse_args(test_args)
     assert parsed.platform == "wayland"
+
+
+def test_screen_boundary_clamping(qapp):
+    win = MainWindow(start_worker=False)
+    win.show()
+
+    screen = QApplication.primaryScreen()
+    ag = screen.availableGeometry()
+
+    # 1. Test clamp_coordinates directly
+    cx, cy = win.clamp_coordinates(-500, -500)
+    assert cx >= ag.left()
+    assert cy >= ag.top()
+
+    cx, cy = win.clamp_coordinates(99999, 99999)
+    assert cx + win.width() <= ag.right() + 1
+    assert cy + win.height() <= ag.bottom() + 1
+
+    # 2. Test dragging off-screen via mouseMoveEvent
+    press_ev = QMouseEvent(
+        QMouseEvent.MouseButtonPress,
+        QPoint(10, 10),
+        win.mapToGlobal(QPoint(10, 10)),
+        Qt.LeftButton,
+        Qt.LeftButton,
+        Qt.NoModifier,
+    )
+    win.mousePressEvent(press_ev)
+
+    # Attempt to drag far off top-left
+    move_ev = QMouseEvent(
+        QMouseEvent.MouseMove,
+        QPoint(-2000, -2000),
+        QPoint(-2000, -2000),
+        Qt.LeftButton,
+        Qt.LeftButton,
+        Qt.NoModifier,
+    )
+    win.mouseMoveEvent(move_ev)
+    assert win.x() >= ag.left()
+    assert win.y() >= ag.top()
+
+    # Attempt to drag far off bottom-right
+    move_ev2 = QMouseEvent(
+        QMouseEvent.MouseMove,
+        QPoint(10000, 10000),
+        QPoint(10000, 10000),
+        Qt.LeftButton,
+        Qt.LeftButton,
+        Qt.NoModifier,
+    )
+    win.mouseMoveEvent(move_ev2)
+    assert win.x() + win.width() <= ag.right() + 1
+    assert win.y() + win.height() <= ag.bottom() + 1
+
+    release_ev = QMouseEvent(
+        QMouseEvent.MouseButtonRelease,
+        QPoint(10, 10),
+        win.mapToGlobal(QPoint(10, 10)),
+        Qt.LeftButton,
+        Qt.NoButton,
+        Qt.NoModifier,
+    )
+    win.mouseReleaseEvent(release_ev)
+
+
+def test_screen_clamping_on_resize(qapp):
+    win = MainWindow(start_worker=False)
+    win.show()
+
+    screen = QApplication.primaryScreen()
+    ag = screen.availableGeometry()
+
+    # Place window at the right edge
+    win.move(ag.right() - win.width(), ag.top() + 100)
+    assert win.x() + win.width() <= ag.right() + 1
+
+    # Add long keys so content width increases
+    for k in ["Ctrl", "Shift", "Super", "Alt", "F12"]:
+        win.key_dis.add_key(k)
+    win.update_card_width()
+
+    # Must still be inside screen geometry
+    assert win.x() >= ag.left()
+    assert win.x() + win.width() <= ag.right() + 1
 
