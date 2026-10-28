@@ -496,23 +496,15 @@ class MainWindow(QMainWindow):
         self.setAttribute(Qt.WA_X11DoNotAcceptFocus, True)
         self.setWindowOpacity(self.opacity_val)
 
-        # Adapt window flags for native Wayland vs X11/Xwayland
-        qpa = QApplication.platformName() if QApplication.instance() else ""
-        if "wayland" in qpa:
-            self.setWindowFlags(
-                Qt.WindowStaysOnTopHint
-                | Qt.FramelessWindowHint
-                | Qt.WindowDoesNotAcceptFocus
-                | Qt.ToolTip,
-            )
-        else:
-            self.setWindowFlags(
-                Qt.WindowStaysOnTopHint
-                | Qt.FramelessWindowHint
-                | Qt.WindowDoesNotAcceptFocus
-                | Qt.X11BypassWindowManagerHint
-                | Qt.Tool,
-            )
+        # Ensure window stays on top and bypasses window managers so it cannot be tiled
+        self.setWindowFlags(
+            Qt.WindowStaysOnTopHint
+            | Qt.FramelessWindowHint
+            | Qt.WindowDoesNotAcceptFocus
+            | Qt.X11BypassWindowManagerHint
+            | Qt.BypassWindowManagerHint
+            | Qt.Tool,
+        )
 
         self.setStyleSheet("QMainWindow { background: transparent; border: none; }")
 
@@ -1033,17 +1025,16 @@ def main():
 
     args = parser.parse_args()
 
-    # Route Qt platform plugin dynamically
-    if "QT_QPA_PLATFORM" not in os.environ:
-        if args.platform == "xcb":
+    # Route Qt platform plugin dynamically (override system defaults like 'wayland;xcb' that break overlays)
+    if args.platform == "xcb":
+        os.environ["QT_QPA_PLATFORM"] = "xcb"
+    elif args.platform == "wayland":
+        os.environ["QT_QPA_PLATFORM"] = "wayland"
+    else:  # auto
+        if os.environ.get("DISPLAY"):
             os.environ["QT_QPA_PLATFORM"] = "xcb"
-        elif args.platform == "wayland":
+        elif os.environ.get("WAYLAND_DISPLAY"):
             os.environ["QT_QPA_PLATFORM"] = "wayland"
-        else:  # auto
-            if os.environ.get("DISPLAY"):
-                os.environ["QT_QPA_PLATFORM"] = "xcb"
-            elif os.environ.get("WAYLAND_DISPLAY"):
-                os.environ["QT_QPA_PLATFORM"] = "wayland"
 
     if args.no_config:
         cfg = dict(DEFAULT_CONFIG)

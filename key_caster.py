@@ -18,23 +18,23 @@ if os.path.exists(venv_python) and sys.prefix != venv_dir:
 
 # On Linux desktop sessions with tiling or Wayland (e.g. COSMIC, Sway, Hyprland, i3),
 # select the appropriate Qt platform plugin:
-if "QT_QPA_PLATFORM" not in os.environ:
-    explicit_platform = None
-    for i, arg in enumerate(sys.argv):
-        if arg in ("--platform", "-P") and i + 1 < len(sys.argv):
-            explicit_platform = sys.argv[i + 1]
-            break
-        elif arg.startswith("--platform="):
-            explicit_platform = arg.split("=", 1)[1]
-            break
+explicit_platform = None
+for i, arg in enumerate(sys.argv):
+    if arg in ("--platform", "-P") and i + 1 < len(sys.argv):
+        explicit_platform = sys.argv[i + 1]
+        break
+    elif arg.startswith("--platform="):
+        explicit_platform = arg.split("=", 1)[1]
+        break
 
-    if explicit_platform:
-        if explicit_platform != "auto":
-            os.environ["QT_QPA_PLATFORM"] = explicit_platform
-    elif os.environ.get("DISPLAY"):
-        os.environ["QT_QPA_PLATFORM"] = "xcb"
-    elif os.environ.get("WAYLAND_DISPLAY"):
-        os.environ["QT_QPA_PLATFORM"] = "wayland"
+if explicit_platform and explicit_platform != "auto":
+    os.environ["QT_QPA_PLATFORM"] = explicit_platform
+elif os.environ.get("DISPLAY"):
+    # XCB (Xwayland/X11) provides override_redirect which prevents tiling managers (like COSMIC)
+    # from capturing the overlay into a split tile and ensures it stays on top.
+    os.environ["QT_QPA_PLATFORM"] = "xcb"
+elif os.environ.get("WAYLAND_DISPLAY"):
+    os.environ["QT_QPA_PLATFORM"] = "wayland"
 
 # Ensure 'src' is available in Python path
 sys.path.insert(0, os.path.join(script_dir, "src"))
