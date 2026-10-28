@@ -3,9 +3,30 @@
 import argparse
 import os
 import signal
+import subprocess
 import sys
 from collections import deque
 from typing import Optional
+
+
+def make_window_sticky_and_top(win_id: int):
+    """Configures EWMH atoms to ensure the window floats above all tiles, workspaces, and full-screen windows."""
+    try:
+        hex_id = hex(win_id)
+        subprocess.run(
+            ["xprop", "-id", hex_id, "-f", "_NET_WM_DESKTOP", "32c", "-set", "_NET_WM_DESKTOP", "4294967295"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        subprocess.run(
+            ["xprop", "-id", hex_id, "-f", "_NET_WM_STATE", "32a", "-set", "_NET_WM_STATE", "_NET_WM_STATE_ABOVE,_NET_WM_STATE_STAYS_ON_TOP,_NET_WM_STATE_STICKY"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+    except Exception:
+        pass
 
 from PyQt5 import QtCore, QtWidgets
 from PyQt5.QtCore import QPoint, Qt, QThread, QTimer, pyqtSignal, pyqtSlot
@@ -494,6 +515,7 @@ class MainWindow(QMainWindow):
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setAttribute(Qt.WA_ShowWithoutActivating, True)
         self.setAttribute(Qt.WA_X11DoNotAcceptFocus, True)
+        self.setAttribute(Qt.WA_X11NetWmWindowTypeDock, True)
         self.setWindowOpacity(self.opacity_val)
 
         # Ensure window stays on top and bypasses window managers so it cannot be tiled
@@ -685,6 +707,16 @@ class MainWindow(QMainWindow):
             if hasattr(self, "central_widget") and self.central_widget:
                 self.central_widget.setFixedWidth(target_w)
 
+    def showEvent(self, event):
+        super().showEvent(event)
+        self.raise_()
+        qpa = QApplication.platformName() if QApplication.instance() else ""
+        if qpa == "xcb":
+            try:
+                make_window_sticky_and_top(int(self.winId()))
+            except Exception:
+                pass
+
     @pyqtSlot(str)
     def on_key_pressed(self, key_label: str):
         if self.is_paused:
@@ -693,6 +725,7 @@ class MainWindow(QMainWindow):
         self.update_card_width()
         if not self.isVisible():
             self.show()
+        self.raise_()
         if self.timeout > 0:
             self.inactivity_timer.start(int(self.timeout * 1000))
 
@@ -701,6 +734,9 @@ class MainWindow(QMainWindow):
         if self.is_paused:
             return
         self.mod_dis.set_modifiers(modifiers)
+        if not self.isVisible():
+            self.show()
+        self.raise_()
         if self.timeout > 0:
             self.inactivity_timer.start(int(self.timeout * 1000))
 
