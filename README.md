@@ -26,6 +26,12 @@ Log out and log back in (or restart) for the group membership to take effect.
 pipx install git+https://github.com/GabrielBaiano/key-caster.git
 ```
 
+### Homebrew (Linux)
+
+```bash
+brew install GabrielBaiano/tap/key-caster
+```
+
 ### Arch Linux (PKGBUILD)
 
 ```bash
