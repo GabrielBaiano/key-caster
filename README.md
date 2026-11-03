@@ -69,14 +69,18 @@ cp assets/key-caster.png ~/.local/share/icons/hicolor/256x256/apps/
 
 ## Usage
 
+You can launch the overlay using either command alias:
+
 ```bash
+key-caster
+# or
 keycaster
 ```
 
 ### Command-line Options
 
 ```text
-keycaster [options]
+key-caster [options]
 
   -P, --platform PLATFORM     Qt platform backend: auto, xcb, wayland (default: auto)
   -c, --config PATH           Path to configuration file (default: ~/.config/key-caster/config.toml)
@@ -86,7 +90,7 @@ keycaster [options]
   -s, --font-size SIZE        Font size in pixels (default: 32)
   -o, --opacity OPACITY       Overlay opacity between 0.1 and 1.0 (default: 0.92)
   -p, --position POSITION     Preset position: bottom-right, bottom-center, bottom-left, top-right, top-left, top-center, center
-  -l, --layout LAYOUT         Keyboard layout: auto, abnt2, us-intl, us (default: auto)
+  -l, --layout LAYOUT         Keyboard layout: auto, abnt2, br, us-intl, us (default: auto)
   --paused                    Start application with key capturing paused
   --privacy                   Start application with privacy masking enabled (display bullets)
 ```
@@ -134,7 +138,7 @@ keycaster --platform wayland
 - **Per-Device Layout Routing**: In `auto` mode, keystrokes are automatically mapped based on the physical hardware device. An internal laptop keyboard (ABNT2 / ThinkPad) and an external USB keyboard (US-Intl / ANSI) can be used simultaneously with accurate keycaps and dead keys.
 - **Mac Typography**: Renders modifier keys with clean symbols (`⇧`, `⌃`, `⌥`, `⌘`) and action keys (`⌫`, `⌦`, `↩`, `⇥`, `⎋`, `⎙`).
 - **Context Menu**: Right-click the overlay to clear keys, toggle auto-hide, pause/resume capturing, toggle privacy masking, change screen position presets, adjust opacity, or override keyboard layouts.
-- **Draggable**: Click and drag with the left mouse button to place the overlay anywhere on screen.
+- **Draggable with Screen Clamping**: Left-click and drag the overlay anywhere. Movement is automatically clamped to visible monitor boundaries so the widget never gets lost off-screen across single or multi-display setups.
 
 ## License & Credits
 
