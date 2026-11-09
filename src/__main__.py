@@ -1156,6 +1156,9 @@ class MainWindow(QMainWindow):
         action = menu.exec_(self.mapToGlobal(event.pos()))
         if action == exit_act:
             self.close()
+            app = QApplication.instance()
+            if app:
+                app.quit()
         elif action == clear_act:
             self.clear_display()
         elif action == toggle_act:
@@ -1196,10 +1199,15 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         self.save_state()
-        if hasattr(self, "worker") and self.worker.isRunning():
+        if hasattr(self, "worker") and self.worker:
             self.worker.stop()
-            self.worker.wait(500)
+            if self.worker.isRunning():
+                self.worker.terminate()
+                self.worker.wait(100)
         event.accept()
+        app = QApplication.instance()
+        if app:
+            app.quit()
 
 
 def main():
@@ -1345,8 +1353,9 @@ def main():
     app.setOrganizationName("key-caster")
     app.setDesktopFileName("key-caster")
 
-    # Enable clean Ctrl+C handling in Qt event loop
-    signal.signal(signal.SIGINT, lambda *_: app.quit())
+    # Enable clean termination handling in Qt event loop
+    signal.signal(signal.SIGINT, lambda *_: (app.quit(), os._exit(0)))
+    signal.signal(signal.SIGTERM, lambda *_: (app.quit(), os._exit(0)))
     sigint_timer = QTimer()
     sigint_timer.start(250)
     sigint_timer.timeout.connect(lambda: None)
@@ -1368,7 +1377,9 @@ def main():
     window.restore_position(position=position, custom_x=custom_x, custom_y=custom_y)
     window.show()
 
-    sys.exit(app.exec_())
+    ret = app.exec_()
+    # Explicitly exit process to terminate blocked evdev reader threads cleanly
+    os._exit(ret)
 
 
 if __name__ == "__main__":

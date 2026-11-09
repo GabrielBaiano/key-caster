@@ -661,3 +661,29 @@ def test_main_window_theme_switching(qapp, tmp_path):
     assert loaded_alpha["bg_alpha"] == 0.65
 
 
+def test_close_event_clean_termination(qapp):
+    win = MainWindow(start_worker=False)
+
+    class DummyWorker:
+        def __init__(self):
+            self._stopped = False
+            self._terminated = False
+
+        def isRunning(self):
+            return True
+
+        def stop(self):
+            self._stopped = True
+
+        def terminate(self):
+            self._terminated = True
+
+        def wait(self, ms):
+            pass
+
+    win.worker = DummyWorker()
+    win.close()
+    assert win.worker._stopped is True
+    assert win.worker._terminated is True
+
+
