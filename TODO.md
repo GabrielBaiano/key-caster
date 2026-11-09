@@ -18,10 +18,19 @@ Tracking improvements, community feedback, and architectural tasks for Key-caste
   - [x] Fall back to system's active RMLVO layout (`get_system_rmlvo`) when device hardware name is ambiguous.
   - [x] Add unit tests verifying external ABNT2 keyboards are not falsely resolved as `us-intl`.
 
-- [x] **Dynamic Card Width & Text Truncation** ([#7](https://github.com/GabrielBaiano/key-caster/issues/7))
-  - [x] Replace `setFixedSize(220, 100)` with `setMinimumWidth(220)` in `MainWindow` and `CentralWidget`.
-  - [x] Recalculate card width dynamically based on `fontMetrics().horizontalAdvance(text)`.
-  - [x] Clamp width between 220px and 600px with screen anchoring compensation.
+- [x] **Card Dimensions & Fixed Geometry**
+  - [x] Enforce fixed `220x100` card size (`setFixedSize(220, 100)`) preventing horizontal shifting.
+
+- [x] **Theme System & Background Transparency**
+  - [x] Add curated theme presets (`dark`, `catppuccin-mocha`, `tokyo-night`, `nord`, `dracula`, `gruvbox-dark`, `light`).
+  - [x] Support custom theme configuration in `~/.config/key-caster/config.toml` (`[custom_theme]`).
+  - [x] Add card background transparency (`bg_alpha`, `--bg-alpha`) via RGBA stylesheet on `CentralWidget`.
+  - [x] Add right-click **Theme** selector submenu.
+
+- [x] **Caps Lock & Modifier Handling**
+  - [x] Pass `Lock` modifier to XKB state resolver (`xkb_state_update_mask`).
+  - [x] Sync Caps Lock state with `/sys/class/leds/*capslock*/brightness` and X11 LockMask.
+  - [x] Map modifier scancodes directly (`29`/`97` Ctrl, `42`/`54` Shift, `56`/`100` Alt, `125`/`126` Super) for instant visual indicator response.
 
 ---
 

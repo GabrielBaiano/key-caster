@@ -91,17 +91,20 @@ key-caster [options]
   -o, --opacity OPACITY       Overlay opacity between 0.1 and 1.0 (default: 0.92)
   -p, --position POSITION     Preset position: bottom-right, bottom-center, bottom-left, top-right, top-left, top-center, center
   -l, --layout LAYOUT         Keyboard layout: auto, abnt2, br, us-intl, us (default: auto)
+  --theme THEME               Theme preset: dark, catppuccin-mocha, tokyo-night, nord, dracula, gruvbox-dark, light (default: dark)
+  --bg-alpha ALPHA            Background card alpha transparency between 0.05 and 1.0 (default: 1.0)
   --paused                    Start application with key capturing paused
   --privacy                   Start application with privacy masking enabled (display bullets)
 ```
 
-### Configuration Persistence
+### Configuration & Themes
 
 Key-caster automatically remembers your settings across restarts in `~/.config/key-caster/config.toml`:
 
+- **Themes & Styling**: Switch presets anytime via the right-click **Theme** menu (`Dark (OLED)`, `Catppuccin Mocha`, `Tokyo Night`, `Nord`, `Dracula`, `Gruvbox Dark`, `Light`) or specify a `--theme` at launch. Custom hex colors can be defined under `[custom_theme]`.
+- **Transparency**: Control overall window opacity via right-click (100%, 90%, 80%, 70%, 50%) or set card background transparency (`bg_alpha`) to keep keystrokes crisp and solid.
 - **Window Position**: Dragging the widget to any screen or selecting a preset preserves your preferred coordinates. If a second monitor is disconnected, Key-caster safely falls back to a visible desktop area.
 - **Layout & Timeout**: Saved whenever toggled from the right-click menu.
-- **Opacity**: Adjustable from the right-click menu (100%, 90%, 80%, 70%, 50%) or CLI and persisted automatically.
 
 Explicit CLI flags always override the saved configuration.
 
