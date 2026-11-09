@@ -8,6 +8,11 @@ except ImportError:
     tomllib = None  # Fallback for Python < 3.11
 
 
+try:
+    from .theme import BUILTIN_THEMES
+except ImportError:
+    from theme import BUILTIN_THEMES
+
 DEFAULT_CONFIG: Dict[str, Any] = {
     "position": "bottom-right",
     "custom_x": None,
@@ -15,6 +20,9 @@ DEFAULT_CONFIG: Dict[str, Any] = {
     "layout": "auto",
     "timeout": 2.0,
     "opacity": 0.92,
+    "bg_alpha": 1.0,
+    "theme": "dark",
+    "custom_theme": None,
     "font_size": 32,
     "max_keys": 5,
     "privacy": False,
@@ -33,6 +41,7 @@ VALID_POSITIONS = {
 }
 
 VALID_LAYOUTS = {"auto", "abnt2", "br", "us-intl", "intl", "alt-intl", "us"}
+VALID_THEMES = set(BUILTIN_THEMES.keys()) | {"custom"}
 
 
 def get_default_config_path() -> str:
@@ -45,11 +54,17 @@ def get_default_config_path() -> str:
 
 
 def _parse_toml_fallback(content: str) -> Dict[str, Any]:
-    """Simple parser for flat key = value TOML files."""
+    """Simple parser for flat key = value and sectioned TOML files."""
     result: Dict[str, Any] = {}
+    current_section: Optional[str] = None
     for line in content.splitlines():
         line = line.strip()
         if not line or line.startswith("#"):
+            continue
+        if line.startswith("[") and line.endswith("]"):
+            current_section = line[1:-1].strip()
+            if current_section not in result:
+                result[current_section] = {}
             continue
         if "=" not in line:
             continue
@@ -63,23 +78,28 @@ def _parse_toml_fallback(content: str) -> Dict[str, Any]:
 
         # Booleans
         if val.lower() == "true":
-            result[key] = True
+            parsed_val = True
         elif val.lower() == "false":
-            result[key] = False
+            parsed_val = False
         # Strings
         elif (val.startswith('"') and val.endswith('"')) or (
             val.startswith("'") and val.endswith("'")
         ):
-            result[key] = val[1:-1]
+            parsed_val = val[1:-1]
         # Numbers
         else:
             try:
                 if "." in val:
-                    result[key] = float(val)
+                    parsed_val = float(val)
                 else:
-                    result[key] = int(val)
+                    parsed_val = int(val)
             except ValueError:
-                result[key] = val
+                parsed_val = val
+
+        if current_section:
+            result[current_section][key] = parsed_val
+        else:
+            result[key] = parsed_val
     return result
 
 
@@ -138,6 +158,20 @@ def load_config(path: Optional[str] = None) -> Dict[str, Any]:
             except (ValueError, TypeError):
                 pass
 
+        if "bg_alpha" in raw:
+            try:
+                ba = float(raw["bg_alpha"])
+                if 0.05 <= ba <= 1.0:
+                    config["bg_alpha"] = ba
+            except (ValueError, TypeError):
+                pass
+
+        if "theme" in raw and str(raw["theme"]).lower() in VALID_THEMES:
+            config["theme"] = str(raw["theme"]).lower()
+
+        if "custom_theme" in raw and isinstance(raw["custom_theme"], dict):
+            config["custom_theme"] = raw["custom_theme"]
+
         if "font_size" in raw:
             try:
                 fs = int(raw["font_size"])
@@ -173,9 +207,13 @@ def dump_toml(data: Dict[str, Any]) -> str:
         "# Automatically updated on UI movement, layout selection, and opacity changes.",
         "",
     ]
+    sections: Dict[str, Dict[str, Any]] = {}
     for key in sorted(data.keys()):
         val = data[key]
         if val is None:
+            continue
+        if isinstance(val, dict):
+            sections[key] = val
             continue
         if isinstance(val, bool):
             lines.append(f"{key} = {'true' if val else 'false'}")
@@ -185,6 +223,25 @@ def dump_toml(data: Dict[str, Any]) -> str:
             lines.append(f"{key} = {val}")
         elif isinstance(val, str):
             lines.append(f'{key} = "{val}"')
+
+    for section_name, section_dict in sorted(sections.items()):
+        if not section_dict:
+            continue
+        lines.append("")
+        lines.append(f"[{section_name}]")
+        for k in sorted(section_dict.keys()):
+            v = section_dict[k]
+            if v is None:
+                continue
+            if isinstance(v, bool):
+                lines.append(f"{k} = {'true' if v else 'false'}")
+            elif isinstance(v, float):
+                lines.append(f"{k} = {round(v, 2)}")
+            elif isinstance(v, int):
+                lines.append(f"{k} = {v}")
+            elif isinstance(v, str):
+                lines.append(f'{k} = "{v}"')
+
     lines.append("")
     return "\n".join(lines)
 
