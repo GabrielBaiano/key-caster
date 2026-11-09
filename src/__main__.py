@@ -48,10 +48,16 @@ except ImportError:
     from src.xkb_resolver import XkbResolver, classify_keyboard_device
 
 try:
+    from theme import BUILTIN_THEMES, Theme, resolve_theme
+except ImportError:
+    from src.theme import BUILTIN_THEMES, Theme, resolve_theme
+
+try:
     from config import (
         DEFAULT_CONFIG,
         VALID_LAYOUTS,
         VALID_POSITIONS,
+        VALID_THEMES,
         get_default_config_path,
         load_config,
         save_config,
@@ -61,10 +67,78 @@ except ImportError:
         DEFAULT_CONFIG,
         VALID_LAYOUTS,
         VALID_POSITIONS,
+        VALID_THEMES,
         get_default_config_path,
         load_config,
         save_config,
     )
+
+
+_caps_led_paths = None
+
+
+def get_caps_lock_led() -> Optional[bool]:
+    """Fast check using sysfs leds."""
+    global _caps_led_paths
+    import glob
+    if _caps_led_paths is None:
+        _caps_led_paths = glob.glob("/sys/class/leds/*capslock*/brightness")
+
+    if not _caps_led_paths:
+        return None
+
+    for p in _caps_led_paths:
+        try:
+            with open(p, "r") as f:
+                val = f.read().strip()
+                if val and val != "0":
+                    return True
+        except Exception:
+            pass
+    return False
+
+
+def get_caps_lock_state() -> bool:
+    """Detects active Caps Lock state on Linux via sysfs LED, X11 or xset."""
+    led = get_caps_lock_led()
+    if led is not None:
+        return led
+
+    try:
+        import ctypes
+        x11 = ctypes.CDLL("libX11.so.6")
+        display = x11.XOpenDisplay(None)
+        if display:
+            root = x11.XDefaultRootWindow(display)
+            root_ret = ctypes.c_ulong()
+            child_ret = ctypes.c_ulong()
+            rx, ry, wx, wy = ctypes.c_int(), ctypes.c_int(), ctypes.c_int(), ctypes.c_int()
+            mask = ctypes.c_uint()
+            x11.XQueryPointer(
+                display,
+                root,
+                ctypes.byref(root_ret),
+                ctypes.byref(child_ret),
+                ctypes.byref(rx),
+                ctypes.byref(ry),
+                ctypes.byref(wx),
+                ctypes.byref(wy),
+                ctypes.byref(mask),
+            )
+            x11.XCloseDisplay(display)
+            if mask.value & 2:
+                return True
+    except Exception:
+        pass
+
+    try:
+        out = subprocess.check_output(["xset", "q"], stderr=subprocess.DEVNULL).decode()
+        if "Caps Lock:   on" in out:
+            return True
+    except Exception:
+        pass
+
+    return False
 
 
 def patch_keyboard_linux():
@@ -182,6 +256,33 @@ def detect_system_layout() -> str:
     return "abnt2"
 
 
+MODIFIER_SCANCODES = {
+    29: "ctrl",      # KEY_LEFTCTRL
+    97: "ctrl",      # KEY_RIGHTCTRL
+    42: "shift",     # KEY_LEFTSHIFT
+    54: "shift",     # KEY_RIGHTSHIFT
+    56: "alt",       # KEY_LEFTALT
+    100: "alt",      # KEY_RIGHTALT / AltGr
+    125: "windows",  # KEY_LEFTMETA
+    126: "windows",  # KEY_RIGHTMETA
+}
+
+
+def normalize_mod_name(name: Optional[str]) -> Optional[str]:
+    if not name:
+        return None
+    n = name.lower()
+    if "ctrl" in n or "control" in n:
+        return "ctrl"
+    if "shift" in n:
+        return "shift"
+    if "alt" in n:
+        return "alt"
+    if "windows" in n or "super" in n or "meta" in n:
+        return "windows"
+    return None
+
+
 class Worker(QThread):
     key_pressed = pyqtSignal(str)
     space_pressed = pyqtSignal()
@@ -290,6 +391,7 @@ class Worker(QThread):
         self.active_auto_layout = detect_system_layout()
         self.is_paused = paused
         self.is_privacy = privacy
+        self.is_caps_lock = get_caps_lock_state()
 
         # Piscina de resolvers em cache para trocar de layout na velocidade da luz
         self.resolvers = {
@@ -302,6 +404,7 @@ class Worker(QThread):
         if layout not in self.resolvers and layout != "auto":
             self.resolvers[layout] = XkbResolver(layout=layout)
         self.device_layout_cache = {}
+        self.active_modifiers = set()
 
     def set_paused(self, paused: bool):
         if self.is_paused != paused:
@@ -398,25 +501,32 @@ class Worker(QThread):
                 )
                 break
 
-            is_modifier = e.name in keyboard.all_modifiers
             is_key_down = e.event_type == keyboard.KEY_DOWN
             is_holding = (
                 is_key_down
                 and last.event_type == keyboard.KEY_DOWN
                 and last.scan_code == e.scan_code
             )
-            is_shift = "shift" in e.modifiers
-            has_super_or_alt = ("windows" in e.modifiers or "alt" in e.modifiers)
+
+            # Detect modifier keys directly by scancode or normalized name
+            mod_name = MODIFIER_SCANCODES.get(e.scan_code) or normalize_mod_name(e.name)
+            if mod_name:
+                if is_key_down:
+                    self.active_modifiers.add(mod_name)
+                else:
+                    self.active_modifiers.discard(mod_name)
+                self.modifiers_updated.emit(list(self.active_modifiers))
+                last = e
+                continue
+
+            is_shift = "shift" in self.active_modifiers
+            has_super_or_alt = ("windows" in self.active_modifiers or "alt" in self.active_modifiers)
 
             # Atalho de troca de layout do desktop (Super+Space ou Alt+Shift)
             if is_key_down and not is_holding and self.is_auto:
                 if has_super_or_alt and e.scan_code == 57:
                     new_layout = "us-intl" if self.active_auto_layout == "abnt2" else "abnt2"
                     self.active_auto_layout = new_layout
-                    for d, l in list(self.device_layout_cache.items()):
-                        if l in ("abnt2", "us-intl"):
-                            # Atualiza layout de dispositivos desconhecidos
-                            pass
                     self.layout_switched.emit(new_layout)
 
             # Atalho de Pause / Resume: Super+Shift+P ou Alt+Shift+P (scancode 25)
@@ -438,32 +548,49 @@ class Worker(QThread):
                 last = e
                 continue
 
+            # Caps Lock toggle
+            if is_key_down and not is_holding and (e.scan_code == 58 or e.name in ("caps lock", "capslock")):
+                self.is_caps_lock = not self.is_caps_lock
+            elif is_key_down:
+                led_state = get_caps_lock_led()
+                if led_state is not None:
+                    self.is_caps_lock = led_state
+
             resolver = self.get_resolver(e)
-            resolved = resolver.resolve(e.scan_code, is_shift=is_shift)
+            resolved = resolver.resolve(
+                e.scan_code, is_shift=is_shift, is_caps_lock=self.is_caps_lock
+            )
 
             if resolved:
                 if resolved["type"] == "modifier":
-                    is_modifier = True
+                    norm_m = normalize_mod_name(resolved.get("name"))
+                    if norm_m:
+                        if is_key_down:
+                            self.active_modifiers.add(norm_m)
+                        else:
+                            self.active_modifiers.discard(norm_m)
+                        self.modifiers_updated.emit(list(self.active_modifiers))
                 elif is_key_down and not is_holding:
                     if resolved["type"] == "space":
                         self.space_pressed.emit()
                     else:
                         label = "•" if (self.is_privacy and resolved["type"] == "char") else resolved["name"]
                         self.key_pressed.emit(label)
-                    self.modifiers_updated.emit(list(e.modifiers))
+                    self.modifiers_updated.emit(list(self.active_modifiers))
             else:
-                if not is_modifier and is_key_down and not is_holding:
+                if is_key_down and not is_holding:
                     raw_name = e.name
                     # Se o dumpkeys cuspir 'unknown', joga fora
                     if raw_name != "unknown":
+                        eff_caps = self.is_caps_lock ^ is_shift
                         if is_shift:
                             active_table = self.shift_maps.get(
                                 self.layout, self.shift_maps.get("abnt2", {})
                             )
                             if raw_name in active_table:
                                 raw_name = active_table[raw_name]
-                            elif len(raw_name) == 1 and raw_name.isalpha():
-                                raw_name = raw_name.upper()
+                        if len(raw_name) == 1 and raw_name.isalpha():
+                            raw_name = raw_name.upper() if eff_caps else raw_name.lower()
 
                         if raw_name == "space":
                             self.space_pressed.emit()
@@ -472,12 +599,7 @@ class Worker(QThread):
                             if self.is_privacy and key_label not in self.map_keys.values():
                                 key_label = "•"
                             self.key_pressed.emit(key_label)
-                    self.modifiers_updated.emit(list(e.modifiers))
-
-            if is_modifier and is_key_down:
-                self.modifiers_updated.emit(list(e.modifiers))
-            elif is_modifier and not is_key_down:
-                self.modifiers_reset.emit((e.name,))
+                    self.modifiers_updated.emit(list(self.active_modifiers))
 
             last = e
 
@@ -489,6 +611,9 @@ class MainWindow(QMainWindow):
         max_keys: int = 5,
         font_size: int = 32,
         opacity: float = 0.92,
+        bg_alpha: Optional[float] = 1.0,
+        theme: str = "dark",
+        custom_theme: Optional[dict] = None,
         layout: str = "auto",
         start_worker: bool = True,
         paused: bool = False,
@@ -502,6 +627,13 @@ class MainWindow(QMainWindow):
         self.max_keys = max_keys
         self.font_size = font_size
         self.opacity_val = max(0.1, min(1.0, float(opacity)))
+        if bg_alpha is None or bg_alpha == 1.0:
+            self.bg_alpha = self.opacity_val if self.opacity_val < 1.0 else 1.0
+        else:
+            self.bg_alpha = float(bg_alpha)
+        self.theme_name = theme or "dark"
+        self.custom_theme = custom_theme
+        self.theme = resolve_theme(self.theme_name, custom_dict=self.custom_theme, bg_alpha=self.bg_alpha)
         self.layout = layout
         self.is_paused = paused
         self.is_privacy = privacy
@@ -531,17 +663,17 @@ class MainWindow(QMainWindow):
 
         self.setStyleSheet("QMainWindow { background: transparent; border: none; }")
 
-        self.key_dis = KeyDisplayer(self, max_keys=max_keys, font_size=font_size)
-        self.mod_dis = ModKeyDisplayer(self)
-        self.central_widget = CentralWidget(self, self.key_dis, self.mod_dis)
+        self.key_dis = KeyDisplayer(self, max_keys=max_keys, font_size=font_size, theme=self.theme)
+        self.mod_dis = ModKeyDisplayer(self, theme=self.theme)
+        self.central_widget = CentralWidget(
+            self, self.key_dis, self.mod_dis, theme=self.theme, bg_alpha=self.bg_alpha
+        )
         self.setCentralWidget(self.central_widget)
 
         self.current_position = "bottom-right"
         self.is_custom_pos = False
 
-        self.setFixedHeight(100)
-        self.setMinimumWidth(220)
-        self.resize(220, 100)
+        self.setFixedSize(220, 100)
 
         # Inactivity auto-clear / auto-hide timer
         self.inactivity_timer = QTimer(self)
@@ -579,6 +711,26 @@ class MainWindow(QMainWindow):
     def set_opacity(self, opacity: float):
         self.opacity_val = max(0.1, min(1.0, float(opacity)))
         self.setWindowOpacity(self.opacity_val)
+        self.bg_alpha = self.opacity_val
+        if hasattr(self, "central_widget") and hasattr(self, "theme"):
+            self.central_widget.apply_theme(self.theme, bg_alpha=self.bg_alpha)
+        self.save_state()
+
+    def set_theme(self, theme_name: str):
+        self.theme_name = theme_name
+        self.theme = resolve_theme(self.theme_name, custom_dict=self.custom_theme, bg_alpha=self.bg_alpha)
+        if hasattr(self, "central_widget"):
+            self.central_widget.apply_theme(self.theme, bg_alpha=self.bg_alpha)
+        if hasattr(self, "key_dis"):
+            self.key_dis.apply_theme(self.theme)
+        if hasattr(self, "mod_dis"):
+            self.mod_dis.apply_theme(self.theme)
+        self.save_state()
+
+    def set_bg_alpha(self, alpha: float):
+        self.bg_alpha = max(0.05, min(1.0, float(alpha)))
+        if hasattr(self, "central_widget") and hasattr(self, "theme"):
+            self.central_widget.apply_theme(self.theme, bg_alpha=self.bg_alpha)
         self.save_state()
 
     def save_state(self):
@@ -594,6 +746,9 @@ class MainWindow(QMainWindow):
             "layout": current_layout,
             "timeout": self.timeout,
             "opacity": self.opacity_val,
+            "bg_alpha": self.bg_alpha,
+            "theme": self.theme_name,
+            "custom_theme": self.custom_theme,
             "font_size": self.font_size,
             "max_keys": self.max_keys,
             "privacy": self.is_privacy,
@@ -673,42 +828,8 @@ class MainWindow(QMainWindow):
             self._setting_preset = False
 
     def update_card_width(self):
-        content_w = self.key_dis.content_width() if hasattr(self.key_dis, "content_width") else 0
-        if content_w > 0:
-            target_w = max(220, min(600, content_w + 48))
-        else:
-            target_w = 220
-
-        old_w = self.width()
-        if target_w != old_w:
-            screen = QApplication.primaryScreen()
-            if screen:
-                ag = screen.availableGeometry()
-            else:
-                ag = QDesktopWidget().availableGeometry()
-
-            curr_x = self.x()
-            curr_y = self.y()
-
-            self._adjusting_width = True
-            try:
-                if self.current_position in ("bottom-right", "top-right") or (
-                    self.is_custom_pos and curr_x > ag.x() + ag.width() // 2
-                ):
-                    delta = target_w - old_w
-                    new_x = max(ag.x(), curr_x - delta)
-                    self.move(new_x, curr_y)
-                elif self.current_position in ("bottom-center", "top-center", "center"):
-                    delta = target_w - old_w
-                    new_x = max(ag.x(), curr_x - (delta // 2))
-                    self.move(new_x, curr_y)
-            finally:
-                self._adjusting_width = False
-
-            self.setFixedWidth(target_w)
-            if hasattr(self, "central_widget") and self.central_widget:
-                self.central_widget.setFixedWidth(target_w)
-            self.clamp_to_screen()
+        # Card size is strictly fixed at 220x100 to prevent resizing/jumping
+        pass
 
     def showEvent(self, event):
         super().showEvent(event)
@@ -782,6 +903,8 @@ class MainWindow(QMainWindow):
     def on_inactivity_timeout(self):
         self.key_dis.clear_keys()
         self.mod_dis.reset_all()
+        if hasattr(self, "worker") and self.worker and hasattr(self.worker, "active_modifiers"):
+            self.worker.active_modifiers.clear()
         self.update_card_width()
 
     @pyqtSlot(str)
@@ -791,6 +914,8 @@ class MainWindow(QMainWindow):
     def clear_display(self):
         self.key_dis.clear_keys()
         self.mod_dis.reset_all()
+        if hasattr(self, "worker") and self.worker and hasattr(self.worker, "active_modifiers"):
+            self.worker.active_modifiers.clear()
         self.update_card_width()
 
     def toggle_auto_hide(self):
@@ -973,6 +1098,26 @@ class MainWindow(QMainWindow):
         elif current == "us":
             l_us.setChecked(True)
 
+        theme_menu = menu.addMenu("Theme")
+        theme_menu.setStyleSheet(menu.styleSheet())
+        t_group = QtWidgets.QActionGroup(self)
+        theme_actions = {}
+        for key, t_obj in BUILTIN_THEMES.items():
+            act = theme_menu.addAction(t_obj.label)
+            act.setCheckable(True)
+            t_group.addAction(act)
+            theme_actions[act] = key
+            if self.theme_name == key:
+                act.setChecked(True)
+
+        if self.custom_theme:
+            act_custom = theme_menu.addAction("Custom")
+            act_custom.setCheckable(True)
+            t_group.addAction(act_custom)
+            theme_actions[act_custom] = "custom"
+            if self.theme_name == "custom":
+                act_custom.setChecked(True)
+
         pos_menu = menu.addMenu("Position")
         pos_menu.setStyleSheet(menu.styleSheet())
         p_br = pos_menu.addAction("Bottom Right")
@@ -1027,6 +1172,8 @@ class MainWindow(QMainWindow):
             self.set_keyboard_layout("abnt2")
         elif action == l_us:
             self.set_keyboard_layout("us")
+        elif action in theme_actions:
+            self.set_theme(theme_actions[action])
         elif action == p_br:
             self.location_on_the_screen("bottom-right")
         elif action == p_bc:
@@ -1144,6 +1291,19 @@ def main():
         default=None,
         help="Start application with privacy masking enabled (display bullets)",
     )
+    parser.add_argument(
+        "--theme",
+        type=str,
+        default=None,
+        choices=sorted(list(VALID_THEMES)),
+        help="Theme preset name (e.g. dark, catppuccin-mocha, tokyo-night, nord, dracula, gruvbox-dark, light)",
+    )
+    parser.add_argument(
+        "--bg-alpha",
+        type=float,
+        default=None,
+        help="Background card alpha transparency between 0.05 and 1.0 (default: 1.0)",
+    )
 
     args = parser.parse_args()
 
@@ -1169,6 +1329,9 @@ def main():
     max_keys = args.max_keys if args.max_keys is not None else cfg.get("max_keys", 5)
     font_size = args.font_size if args.font_size is not None else cfg.get("font_size", 32)
     opacity = args.opacity if args.opacity is not None else cfg.get("opacity", 0.92)
+    bg_alpha = args.bg_alpha if args.bg_alpha is not None else cfg.get("bg_alpha", 1.0)
+    theme = args.theme if args.theme is not None else cfg.get("theme", "dark")
+    custom_theme = cfg.get("custom_theme", None)
     layout = args.layout if args.layout is not None else cfg.get("layout", "auto")
     paused = args.paused if args.paused is not None else cfg.get("paused", False)
     privacy = args.privacy if args.privacy is not None else cfg.get("privacy", False)
@@ -1193,6 +1356,9 @@ def main():
         max_keys=max_keys,
         font_size=font_size,
         opacity=opacity,
+        bg_alpha=bg_alpha,
+        theme=theme,
+        custom_theme=custom_theme,
         layout=layout,
         paused=paused,
         privacy=privacy,

@@ -58,8 +58,40 @@ def test_mod_key_displayer(qapp):
     assert "#555555" in mod.modifiers["ctrl"].text()
     assert "#ffffff" in mod.modifiers["shift"].text()
 
+    # Left and Right Ctrl normalization
+    mod.set_modifiers(["left ctrl"])
+    assert "#ffffff" in mod.modifiers["ctrl"].text()
+    mod.reset_modifiers(["left ctrl"])
+    assert "#555555" in mod.modifiers["ctrl"].text()
+
+    mod.set_modifiers(["right ctrl"])
+    assert "#ffffff" in mod.modifiers["ctrl"].text()
+    mod.reset_modifiers(["right ctrl"])
+    assert "#555555" in mod.modifiers["ctrl"].text()
+
     mod.reset_all()
     assert "#555555" in mod.modifiers["shift"].text()
+    assert "#555555" in mod.modifiers["ctrl"].text()
+
+
+def test_modifier_scancodes():
+    from src.__main__ import MODIFIER_SCANCODES, normalize_mod_name
+    assert MODIFIER_SCANCODES[29] == "ctrl"
+    assert MODIFIER_SCANCODES[97] == "ctrl"
+    assert MODIFIER_SCANCODES[42] == "shift"
+    assert MODIFIER_SCANCODES[54] == "shift"
+    assert MODIFIER_SCANCODES[56] == "alt"
+    assert MODIFIER_SCANCODES[100] == "alt"
+    assert MODIFIER_SCANCODES[125] == "windows"
+    assert MODIFIER_SCANCODES[126] == "windows"
+
+    assert normalize_mod_name("Left Ctrl") == "ctrl"
+    assert normalize_mod_name("RIGHT CTRL") == "ctrl"
+    assert normalize_mod_name("left shift") == "shift"
+    assert normalize_mod_name("right alt") == "alt"
+    assert normalize_mod_name("alt gr") == "alt"
+    assert normalize_mod_name("left windows") == "windows"
+    assert normalize_mod_name("Super_L") == "windows"
 
 
 def test_worker_mac_symbols():
@@ -396,42 +428,49 @@ def test_worker_privacy_character_masking():
     assert label_action == "↩"
 
 
-def test_dynamic_card_width_expansion_and_reset(qapp):
+def test_fixed_card_width(qapp):
     win = MainWindow(start_worker=False)
     assert win.width() == 220
+    assert win.height() == 100
     assert win.central_widget.width() == 220
+    assert win.central_widget.height() == 100
 
-    # Normal short key keeps minimum width
+    # Normal short key keeps fixed dimensions
     win.on_key_pressed("A")
     assert win.width() == 220
+    assert win.height() == 100
 
-    # Long shortcut expands card width dynamically
+    # Long text keeps fixed dimensions (does not expand)
     win.on_key_pressed("Ctrl+Alt+Shift+Delete")
-    assert win.width() > 220
-    assert win.central_widget.width() == win.width()
-
-    # Clearing keys resets card width to minimum 220
-    win.clear_display()
     assert win.width() == 220
+    assert win.height() == 100
     assert win.central_widget.width() == 220
 
-
-def test_dynamic_card_width_right_edge_anchoring(qapp):
-    win = MainWindow(start_worker=False)
-    win.location_on_the_screen("bottom-right", margin_x=40, margin_y=60)
-    initial_x = win.x()
-    initial_right = initial_x + win.width()
-
-    # Long text expands leftwards to preserve right margin
-    win.on_key_pressed("Ctrl+Alt+Shift+Delete")
-    assert win.width() > 220
-    assert win.x() + win.width() == initial_right
-    assert win.x() < initial_x
-
-    # Reset restores initial x and width
+    # Clearing keys keeps fixed dimensions
     win.clear_display()
     assert win.width() == 220
-    assert win.x() == initial_x
+    assert win.height() == 100
+
+
+def test_caps_lock_resolution():
+    from src.xkb_resolver import XkbResolver
+    resolver = XkbResolver("us-intl")
+
+    # Lowercase with caps off
+    res_lower = resolver.resolve(30, is_shift=False, is_caps_lock=False)
+    assert res_lower == {"type": "char", "name": "a"}
+
+    # Uppercase with caps on
+    res_caps = resolver.resolve(30, is_shift=False, is_caps_lock=True)
+    assert res_caps == {"type": "char", "name": "A"}
+
+    # Inversion: Shift + CapsLock -> lowercase
+    res_inv = resolver.resolve(30, is_shift=True, is_caps_lock=True)
+    assert res_inv == {"type": "char", "name": "a"}
+
+    # Numbers remain numbers with caps lock
+    res_num = resolver.resolve(2, is_shift=False, is_caps_lock=True)
+    assert res_num == {"type": "char", "name": "1"}
 
 
 def test_packaging_desktop_entry():
@@ -589,4 +628,36 @@ def test_screen_clamping_on_resize(qapp):
     # Must still be inside screen geometry
     assert win.x() >= ag.left()
     assert win.x() + win.width() <= ag.right() + 1
+
+
+def test_main_window_theme_switching(qapp, tmp_path):
+    from config import load_config
+    config_file = str(tmp_path / "config.toml")
+    win = MainWindow(
+        start_worker=False,
+        theme="nord",
+        bg_alpha=0.8,
+        config_path=config_file,
+        save_state_enabled=True,
+    )
+    assert win.theme_name == "nord"
+    assert win.bg_alpha == 0.8
+    assert "#eceff4" in win.key_dis.styleSheet()
+
+    # Switch theme to catppuccin-mocha
+    win.set_theme("catppuccin-mocha")
+    assert win.theme_name == "catppuccin-mocha"
+    assert "#cdd6f4" in win.key_dis.styleSheet()
+
+    # Verify state saved to config file
+    loaded = load_config(config_file)
+    assert loaded["theme"] == "catppuccin-mocha"
+    assert loaded["bg_alpha"] == 0.8
+
+    # Switch bg_alpha
+    win.set_bg_alpha(0.65)
+    assert win.bg_alpha == 0.65
+    loaded_alpha = load_config(config_file)
+    assert loaded_alpha["bg_alpha"] == 0.65
+
 

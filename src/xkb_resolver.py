@@ -297,10 +297,13 @@ class XkbResolver:
             return
 
         self.shift_idx = self.xkb.xkb_keymap_mod_get_index(self.keymap, b"Shift")
+        self.caps_idx = self.xkb.xkb_keymap_mod_get_index(self.keymap, b"Lock")
         self.current_rmlvo = rmlvo
         self.available = True
 
-    def resolve(self, scan_code: int, is_shift: bool = False) -> Optional[Dict[str, str]]:
+    def resolve(
+        self, scan_code: int, is_shift: bool = False, is_caps_lock: bool = False
+    ) -> Optional[Dict[str, str]]:
         """
         Resolves an evdev scancode into a structured key descriptor.
         Returns:
@@ -313,7 +316,8 @@ class XkbResolver:
         # e ate hoje a gente tem que carregar esse legado do c#@!
         xkb_code = scan_code + 8
         mod_mask = (1 << self.shift_idx) if is_shift else 0
-        self.xkb.xkb_state_update_mask(self.state, mod_mask, 0, 0, 0, 0, 0)
+        locked_mask = (1 << self.caps_idx) if is_caps_lock else 0
+        self.xkb.xkb_state_update_mask(self.state, mod_mask, 0, locked_mask, 0, 0, 0)
 
         sym = self.xkb.xkb_state_key_get_one_sym(self.state, xkb_code)
         if not sym:
